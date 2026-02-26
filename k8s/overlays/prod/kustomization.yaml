@@ -1,0 +1,10 @@
+namespace: gridlogger
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/your-user/gridlogger-backend
+    newName: ghcr.io/your-user/gridlogger-backend
+    newTag: latest
+  - name: ghcr.io/your-user/gridlogger-frontend
+    newName: ghcr.io/your-user/gridlogger-frontend
+    newTag: latest

@@ -1,0 +1,9 @@
+resources:
+  - namespace.yaml
+  - timescaledb.yaml
+  - timescaledb-svc.yaml
+  - backend.yaml
+  - backend-svc.yaml
+  - frontend.yaml
+  - frontend-svc.yaml
+  - ingress.yaml

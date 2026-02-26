@@ -1,0 +1,59 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.18.2-pg16
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid
+      POSTGRES_DB: gridlogger
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grid -d gridlogger"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://grid:grid@timescaledb:5432/gridlogger?sslmode=disable
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: ["sh", "scripts/migrate.sh"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      LISTEN_ADDR: :8080
+      DATABASE_URL: postgres://grid:grid@timescaledb:5432/gridlogger?sslmode=disable
+      OUTAGE_THRESHOLD_SECONDS: 120
+      DEFAULT_PROJECT_ID: 1
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "5173:80"
+
+volumes:
+  timescale-data:

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: gridlogger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/your-user/gridlogger-backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: LISTEN_ADDR
+          value: ":8080"
+        - name: OUTAGE_THRESHOLD_SECONDS
+          value: "120"
+        - name: DEFAULT_PROJECT_ID
+          value: "1"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: DATABASE_URL
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
