@@ -1,0 +1,16 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--api.insecure=true"
+      - "--accesslog=true"
+      - "--log.level=DEBUG"
+    logs:
+      general:
+        level: DEBUG
+    accessLog:
+      enabled: true
