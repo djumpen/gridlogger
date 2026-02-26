@@ -66,6 +66,26 @@ function segmentStyle(interval) {
     width: `${Math.max(0.2, width)}%`
   }
 }
+
+function formatTime(value) {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date(value))
+}
+
+function formatDuration(startValue, endValue) {
+  const durationMs = Math.max(0, new Date(endValue).getTime() - new Date(startValue).getTime())
+  const totalMinutes = Math.floor(durationMs / (60 * 1000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+function segmentTitle(interval) {
+  return `${interval.status}: ${formatTime(interval.start)} -> ${formatTime(interval.end)} (${formatDuration(interval.start, interval.end)})`
+}
 </script>
 
 <template>
@@ -85,7 +105,7 @@ function segmentStyle(interval) {
         class="segment"
         :class="interval.status"
         :style="segmentStyle(interval)"
-        :title="`${interval.status}: ${interval.start} -> ${interval.end}`"
+        :title="segmentTitle(interval)"
       ></div>
     </div>
     <div v-if="showLabels" class="hour-labels">

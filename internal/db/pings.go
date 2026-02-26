@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -47,4 +48,20 @@ func (r *PingRepository) GetPingsBetween(ctx context.Context, projectID int, fro
 		return nil, err
 	}
 	return out, nil
+}
+
+func (r *PingRepository) GetFirstPing(ctx context.Context, projectID int) (time.Time, bool, error) {
+	var first sql.NullTime
+	err := r.pool.QueryRow(ctx, `
+		SELECT MIN(ts)
+		FROM pings
+		WHERE project_id = $1
+	`, projectID).Scan(&first)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !first.Valid {
+		return time.Time{}, false, nil
+	}
+	return first.Time, true, nil
 }

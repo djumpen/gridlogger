@@ -287,7 +287,8 @@ h1 { margin: 4px 0 8px; }
 
 .segment.available { background: var(--available); }
 .segment.outage { background: var(--outage); }
-.segment.future { background: var(--future); }
+.segment.future,
+.segment.unknown { background: var(--future); }
 
 .error {
   color: var(--outage);

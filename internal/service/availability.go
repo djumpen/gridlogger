@@ -11,6 +11,7 @@ import (
 type PingStore interface {
 	InsertPing(ctx context.Context, projectID int, ts time.Time) error
 	GetPingsBetween(ctx context.Context, projectID int, from, to time.Time) ([]time.Time, error)
+	GetFirstPing(ctx context.Context, projectID int) (time.Time, bool, error)
 }
 
 type Interval struct {
@@ -62,14 +63,19 @@ func (s *AvailabilityService) BuildIntervals(ctx context.Context, projectID int,
 		return nil, Stats{}, fmt.Errorf("get pings: %w", err)
 	}
 
+	firstPing, hasFirstPing, err := s.store.GetFirstPing(ctx, projectID)
+	if err != nil {
+		return nil, Stats{}, fmt.Errorf("get first ping: %w", err)
+	}
+
 	sort.Slice(pings, func(i, j int) bool { return pings[i].Before(pings[j]) })
 
 	intervals := make([]Interval, 0)
 	currentStart := from
-	currentStatus := statusAt(from, pings, s.outageThreshold)
+	currentStatus := statusAt(from, pings, s.outageThreshold, firstPing, hasFirstPing)
 
 	for t := from.Add(30 * time.Second); !t.After(to); t = t.Add(30 * time.Second) {
-		st := statusAt(t, pings, s.outageThreshold)
+		st := statusAt(t, pings, s.outageThreshold, firstPing, hasFirstPing)
 		if st == currentStatus {
 			continue
 		}
@@ -88,7 +94,11 @@ func (s *AvailabilityService) BuildIntervals(ctx context.Context, projectID int,
 	return intervals, stats, nil
 }
 
-func statusAt(point time.Time, pings []time.Time, threshold time.Duration) string {
+func statusAt(point time.Time, pings []time.Time, threshold time.Duration, firstPing time.Time, hasFirstPing bool) string {
+	if !hasFirstPing || point.Before(firstPing) {
+		return "unknown"
+	}
+
 	minTs := point.Add(-threshold)
 	for i := len(pings) - 1; i >= 0; i-- {
 		if pings[i].After(point) {
@@ -124,7 +134,7 @@ func calcStats(intervals []Interval, from, to time.Time) Stats {
 		d := end.Sub(start)
 		if iv.Status == "available" {
 			available += d
-		} else {
+		} else if iv.Status == "outage" {
 			outage += d
 		}
 	}
