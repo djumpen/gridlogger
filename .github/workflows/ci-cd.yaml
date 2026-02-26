@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  BACKEND_IMAGE: ghcr.io/djumpen/gridlogger-backend
+  FRONTEND_IMAGE: ghcr.io/djumpen/gridlogger-frontend
   K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || 'gridlogger' }}
 
 jobs:
@@ -69,8 +70,18 @@ jobs:
           file: Dockerfile.backend
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
 
   deploy:
     name: deploy
@@ -101,7 +112,14 @@ jobs:
 
       - name: Update backend image tag
         run: |
-          kubectl -n "$K8S_NAMESPACE" set image deployment/backend backend="${IMAGE_NAME}:${GITHUB_SHA}"
+          kubectl -n "$K8S_NAMESPACE" set image deployment/backend backend="${BACKEND_IMAGE}:${GITHUB_SHA}"
 
-      - name: Wait for rollout
+      - name: Update frontend image tag
+        run: |
+          kubectl -n "$K8S_NAMESPACE" set image deployment/frontend frontend="${FRONTEND_IMAGE}:${GITHUB_SHA}"
+
+      - name: Wait for backend rollout
         run: kubectl -n "$K8S_NAMESPACE" rollout status deployment/backend --timeout=180s
+
+      - name: Wait for frontend rollout
+        run: kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend --timeout=180s

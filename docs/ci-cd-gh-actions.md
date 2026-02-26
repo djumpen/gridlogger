@@ -10,14 +10,15 @@ On every push to `main` (including merge commits), it runs:
    - Go tests (`go test ./...`)
    - Frontend build (`npm ci && npm run build`)
 2. `build-and-push`
-   - Builds backend image from `Dockerfile.backend`
-   - Pushes to GHCR with tags:
-     - `ghcr.io/<owner>/<repo>:<sha>`
-     - `ghcr.io/<owner>/<repo>:latest`
+  - Builds backend image from `Dockerfile.backend`
+  - Builds frontend image from `Dockerfile.frontend`
+  - Pushes both to GHCR with tags:
+    - `ghcr.io/djumpen/gridlogger-backend:<sha>` and `:latest`
+    - `ghcr.io/djumpen/gridlogger-frontend:<sha>` and `:latest`
 3. `deploy`
    - Applies manifests: `kubectl apply -k k8s/overlays/prod`
-   - Updates backend deployment image to SHA tag
-   - Waits for rollout to finish
+  - Updates backend and frontend deployment images to SHA tags
+  - Waits for rollout to finish for both deployments
 
 The deploy job is gated to `main` only.
 
@@ -73,13 +74,17 @@ The pipeline applies manifests first, then updates deployment image explicitly:
 
 ```bash
 kubectl -n "$K8S_NAMESPACE" set image deployment/backend \
-  backend="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_SHA}"
+  backend="ghcr.io/djumpen/gridlogger-backend:${GITHUB_SHA}"
+
+kubectl -n "$K8S_NAMESPACE" set image deployment/frontend \
+  frontend="ghcr.io/djumpen/gridlogger-frontend:${GITHUB_SHA}"
 ```
 
 Then waits for successful rollout:
 
 ```bash
 kubectl -n "$K8S_NAMESPACE" rollout status deployment/backend --timeout=180s
+kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend --timeout=180s
 ```
 
 ### Manifest example (backend deployment)
@@ -96,10 +101,10 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/your-user/gridlogger-backend:latest
+          image: ghcr.io/djumpen/gridlogger-backend:latest
 ```
 
-At deploy time, Actions replaces that image with SHA tag from current commit.
+At deploy time, Actions replaces backend/frontend images with SHA tags from current commit.
 
 ---
 
@@ -115,15 +120,18 @@ cd frontend && npm ci && npm run build
 ### Validate image build locally
 
 ```bash
-docker build -f Dockerfile.backend -t ghcr.io/<owner>/<repo>:local .
+docker build -f Dockerfile.backend -t ghcr.io/djumpen/gridlogger-backend:local .
+docker build -f Dockerfile.frontend -t ghcr.io/djumpen/gridlogger-frontend:local .
 ```
 
 ### Validate k8s deploy steps locally
 
 ```bash
 kubectl apply -k k8s/overlays/prod
-kubectl -n gridlogger set image deployment/backend backend=ghcr.io/<owner>/<repo>:<sha>
+kubectl -n gridlogger set image deployment/backend backend=ghcr.io/djumpen/gridlogger-backend:<sha>
+kubectl -n gridlogger set image deployment/frontend frontend=ghcr.io/djumpen/gridlogger-frontend:<sha>
 kubectl -n gridlogger rollout status deployment/backend --timeout=180s
+kubectl -n gridlogger rollout status deployment/frontend --timeout=180s
 ```
 
 ### Optional: run GitHub Actions locally with `act`
@@ -142,7 +150,7 @@ act push -j test
 
 - Check repository **Workflow permissions** is Read/Write
 - Ensure workflow has `permissions: packages: write`
-- Ensure package namespace matches `ghcr.io/<owner>/<repo>`
+- Ensure package namespace matches `ghcr.io/djumpen/gridlogger-backend` and `ghcr.io/djumpen/gridlogger-frontend`
 
 ### `kubectl` auth errors (`Unauthorized`, cert errors)
 
@@ -163,9 +171,15 @@ act push -j test
   - image pull permissions for private GHCR package
   - failing readiness/liveness probes
 
-### Frontend image is not updated by this pipeline
+### Frontend rollout does not pick new image
 
-Current `ci-cd.yaml` builds and deploys backend image only. If you also want frontend image build/deploy in the same workflow, add a second build/push step and `kubectl set image deployment/frontend ...`.
+- Verify frontend image exists in GHCR with the current SHA tag
+- Check rollout status and pod events:
+  ```bash
+  kubectl -n gridlogger rollout status deployment/frontend --timeout=180s
+  kubectl -n gridlogger describe deployment frontend
+  kubectl -n gridlogger get pods
+  ```
 
 ---
 

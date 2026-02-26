@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/your-user/gridlogger-frontend:latest
+        image: ghcr.io/djumpen/gridlogger-frontend:latest
         ports:
         - containerPort: 80
