@@ -5,10 +5,18 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
+    persistence:
+      enabled: true
+      path: /data
+      size: 128Mi
     additionalArguments:
       - "--api.insecure=true"
       - "--accesslog=true"
       - "--log.level=DEBUG"
+      - "--certificatesresolvers.letsencrypt.acme.email=contact@svitlo.homes"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
     logs:
       general:
         level: DEBUG

@@ -31,6 +31,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /readyz", h.handleHealth)
 	h.mux.HandleFunc("GET /api/default-project", h.handleDefaultProject)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
+	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
 }
 

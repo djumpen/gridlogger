@@ -3,10 +3,16 @@ kind: Ingress
 metadata:
   name: gridlogger
   namespace: gridlogger
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   ingressClassName: traefik
+  tls:
+  - hosts:
+    - svitlo.homes
   rules:
-  - host: gridlogger.local
+  - host: svitlo.homes
     http:
       paths:
       - path: /

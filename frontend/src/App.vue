@@ -227,7 +227,7 @@ onMounted(loadAvailability)
   <main class="page">
     <header class="hero">
       <div>
-        <p class="kicker">GridLogger</p>
+        <p class="kicker">Svitlo.🏘️</p>
         <h1>Power Availability Calendar</h1>
         <p class="sub">Project {{ projectId }} · TZ {{ timezone }} · outage if no ping for 2 minutes</p>
       </div>
