@@ -1,0 +1,4 @@
+namespace: gridlogger
+resources:
+  - serviceaccount.yaml
+  - infisicalsecret-gridlogger-prod.yaml

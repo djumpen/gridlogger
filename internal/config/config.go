@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL      string
 	OutageThreshold  time.Duration
 	DefaultProjectID int
+	TestEnv          string
 }
 
 func Load() (Config, error) {
@@ -20,6 +21,8 @@ func Load() (Config, error) {
 		DatabaseURL:      os.Getenv("DATABASE_URL"),
 		OutageThreshold:  2 * time.Minute,
 		DefaultProjectID: 1,
+
+		TestEnv: getenv("TEST_ENV", "Not set"),
 	}
 
 	if cfg.DatabaseURL == "" {

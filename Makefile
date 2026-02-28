@@ -22,13 +22,25 @@ loop:
 deploy:
 	kubectl apply -f k8s/traefik/traefik-helmchartconfig.yaml
 	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl -n $(NAMESPACE) create secret generic gridlogger-secrets \
-	  --from-literal=POSTGRES_USER="USERNAME" \
-	  --from-literal=POSTGRES_PASSWORD="CHANGE_ME" \
-	  --from-literal=POSTGRES_DB="gridlogger" \
-	  --from-literal=DATABASE_URL="postgres://grid:CHANGE_ME@timescaledb.$(NAMESPACE).svc.cluster.local:5432/gridlogger?sslmode=disable" \
-	  --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -k k8s/infisical
 	kubectl apply -k k8s/overlays/prod
+
+.PHONY: infisical-install
+infisical-install:
+	helm repo add infisical-helm-charts 'https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/'
+	helm repo update
+	helm upgrade --install infisical-secrets-operator infisical-helm-charts/secrets-operator \
+	  --namespace infisical-operator-system \
+	  --create-namespace
+
+.PHONY: infisical-apply
+infisical-apply:
+	kubectl apply -k k8s/infisical
+
+.PHONY: infisical-status
+infisical-status:
+	kubectl get infisicalsecrets.secrets.infisical.com -A
+	kubectl get secret -n $(NAMESPACE) gridlogger-secrets
 
 .PHONY: migrate-local
 migrate-local:

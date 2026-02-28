@@ -21,6 +21,8 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
+	log.Printf("test config: %+v\n", cfg.TestEnv)
+
 	ctx := context.Background()
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {

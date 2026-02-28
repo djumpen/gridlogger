@@ -114,6 +114,8 @@ Main branch pipeline runs tests, builds/pushes backend image to GHCR (`sha` + `l
 
 See detailed setup and troubleshooting in `docs/ci-cd-gh-actions.md`.
 
+Secrets management via Infisical is documented in `docs/INFISICAL.md`.
+
 ## Project layout
 
 - `cmd/server`: API entrypoint

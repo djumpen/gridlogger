@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import IntervalBar from './components/IntervalBar.vue'
 
 const projectId = 1
@@ -15,6 +15,9 @@ const stats = ref({
 })
 const windowFrom = ref('')
 const windowTo = ref('')
+const dateInputRef = ref(null)
+const calendarPopoverRef = ref(null)
+const calendarOpen = ref(false)
 
 function formatForInput(date) {
   const p = (n) => String(n).padStart(2, '0')
@@ -172,6 +175,34 @@ const currentStatus = computed(() => {
   return 'unknown'
 })
 
+const windowLabel = computed(() => {
+  if (!windowFrom.value || !windowTo.value) return ''
+  return `${windowFrom.value.slice(0, 10)} → ${windowTo.value.slice(0, 10)}`
+})
+
+function openDatePicker() {
+  calendarOpen.value = !calendarOpen.value
+  if (!calendarOpen.value) return
+  nextTick(() => {
+    dateInputRef.value?.focus()
+  })
+}
+
+function closeDatePicker() {
+  calendarOpen.value = false
+}
+
+function handleDateChange() {
+  loadAvailability()
+  closeDatePicker()
+}
+
+function handleOutsidePointerDown(event) {
+  if (!calendarOpen.value) return
+  if (calendarPopoverRef.value?.contains(event.target)) return
+  closeDatePicker()
+}
+
 function computeWindow() {
   const base = new Date(`${selectedDate.value}T00:00:00`)
   if (Number.isNaN(base.getTime())) {
@@ -220,35 +251,40 @@ async function loadAvailability() {
   }
 }
 
-onMounted(loadAvailability)
+onMounted(() => {
+  loadAvailability()
+  document.addEventListener('pointerdown', handleOutsidePointerDown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutsidePointerDown)
+})
 </script>
 
 <template>
   <main class="page">
+    <div class="topbar">
+      <p class="kicker">Svitlo.🏘️</p>
+      <div class="topbar-actions">
+        <select class="lang-select" aria-label="Language selector">
+          <option value="en">🇬🇧 EN</option>
+        </select>
+        <button class="login-link" type="button">Login</button>
+      </div>
+    </div>
+
     <header class="hero">
       <div>
-        <p class="kicker">Svitlo.🏘️</p>
-        <h1>Power Availability Calendar</h1>
-        <p class="sub">Project {{ projectId }} · TZ {{ timezone }} · outage if no ping for 2 minutes</p>
-      </div>
-      <div class="controls">
-        <input v-model="selectedDate" type="date" @change="loadAvailability" />
-        <div class="tabs">
-          <button
-            v-for="item in viewOptions"
-            :key="item.value"
-            :class="{ active: view === item.value }"
-            @click="view = item.value; loadAvailability()"
-          >
-            {{ item.label }}
-          </button>
-        </div>
+        <h1>Коновальця 36Б</h1>
       </div>
     </header>
 
     <section class="stats">
       <article>
-        <h2 :class="`status-${currentStatus.replace(' ', '-')}`">{{ currentStatus }}</h2>
+        <h2 class="current-status-row" :class="`status-${currentStatus.replace(' ', '-')}`">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>{{ currentStatus }}</span>
+        </h2>
         <p>Current status</p>
       </article>
       <article>
@@ -267,8 +303,33 @@ onMounted(loadAvailability)
 
     <section class="calendar" v-if="!loading && !error">
       <header>
-        <h3>Intervals</h3>
-        <p>{{ new Date(windowFrom).toLocaleDateString() }} → {{ new Date(windowTo).toLocaleDateString() }}</p>
+        <div class="calendar-title-row">
+          <h3>Intervals</h3>
+          <div class="tabs">
+            <button
+              v-for="item in viewOptions"
+              :key="item.value"
+              :class="{ active: view === item.value }"
+              @click="view = item.value; loadAvailability()"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+        </div>
+        <div class="window-row">
+          <p>{{ windowLabel }}</p>
+          <div class="calendar-popover-wrap" ref="calendarPopoverRef">
+            <button class="calendar-btn" type="button" @click="openDatePicker" aria-label="Open calendar">📅</button>
+            <div v-if="calendarOpen" class="calendar-popover">
+              <input
+                ref="dateInputRef"
+                v-model="selectedDate"
+                type="date"
+                @change="handleDateChange"
+              />
+            </div>
+          </div>
+        </div>
       </header>
       <div class="rows" v-if="groupedByDay.length">
         <div class="row axis-row">
