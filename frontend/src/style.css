@@ -67,6 +67,26 @@ body {
   min-width: 0;
 }
 
+.telegram-widget-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.user-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--text);
+  background: rgba(15, 23, 32, 0.55);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.auth-muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .login-link {
   border: 0;
   background: transparent;
@@ -516,11 +536,9 @@ h1 { margin: 0px 0 8px; }
   font-weight: 600;
 }
 
-.page-footer {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 20px;
-  opacity: 0.95;
+.auth-error {
+  margin-top: 0;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 800px) {

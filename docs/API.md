@@ -40,3 +40,57 @@ Success `200` body shape:
 Errors:
 - `400` invalid path params or query window
 - `404` unknown route/method
+
+## GET `/auth/telegram/config`
+
+Returns Telegram widget settings and whether auth is enabled.
+
+Success `200` example:
+
+```json
+{
+  "enabled": true,
+  "botUsername": "your_bot_name",
+  "requestAccess": "write"
+}
+```
+
+## POST `/auth/telegram/callback`
+
+Accepts Telegram Login Widget payload (`application/x-www-form-urlencoded` or JSON),
+verifies signature/auth date, upserts user, returns session token and user.
+
+Success `200` example:
+
+```json
+{
+  "token": "<jwt>",
+  "user": {
+    "telegramId": 123456789,
+    "username": "username",
+    "firstName": "First",
+    "lastName": "Last",
+    "photoUrl": "https://...",
+    "isBlocked": false,
+    "isAdmin": false
+  }
+}
+```
+
+Errors:
+- `400` invalid payload
+- `401` hash mismatch / stale / invalid auth data
+- `403` blocked user
+- `409` replay detected
+
+## GET `/me`
+
+Returns current user from Bearer token or `gridlogger_session` cookie.
+
+Errors:
+- `401` unauthorized / invalid token
+- `403` blocked user
+
+## POST `/auth/logout`
+
+Clears auth cookie and returns `{ \"status\": \"ok\" }`.

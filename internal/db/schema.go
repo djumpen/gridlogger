@@ -17,6 +17,21 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		`CREATE INDEX IF NOT EXISTS idx_pings_project_ts ON pings(project_id, ts DESC)`,
 		`ALTER TABLE pings DROP CONSTRAINT IF EXISTS pings_pkey`,
 		`SELECT create_hypertable('pings', by_range('ts'), if_not_exists => TRUE)`,
+		`CREATE TABLE IF NOT EXISTS telegram_accounts (
+			telegram_id BIGINT PRIMARY KEY,
+			username TEXT NOT NULL DEFAULT '',
+			first_name TEXT NOT NULL DEFAULT '',
+			last_name TEXT NOT NULL DEFAULT '',
+			photo_url TEXT NOT NULL DEFAULT '',
+			is_blocked BOOLEAN NOT NULL DEFAULT FALSE,
+			is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+			last_auth_date BIGINT NOT NULL DEFAULT 0,
+			last_login_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_telegram_accounts_username ON telegram_accounts(username)`,
+		`CREATE INDEX IF NOT EXISTS idx_telegram_accounts_last_login_at ON telegram_accounts(last_login_at DESC)`,
 	}
 	for _, q := range stmts {
 		if _, err := pool.Exec(ctx, q); err != nil {

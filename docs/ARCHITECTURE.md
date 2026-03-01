@@ -8,6 +8,16 @@
 4. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
 5. Backend returns intervals + stats for the same window.
 
+## Telegram auth flow
+
+1. Frontend loads `GET /auth/telegram/config`.
+2. Telegram Login Widget returns signed payload in browser.
+3. Frontend posts payload to `POST /auth/telegram/callback`.
+4. Backend validates hash per Telegram spec and checks `auth_date` TTL.
+5. Backend upserts `telegram_accounts`, rejects replay based on `last_auth_date`.
+6. Backend issues HS256 JWT and sets `HttpOnly` session cookie.
+7. Frontend reads user via `GET /me`.
+
 ## Why compute in backend code
 
 Given small scale and simple rules, interval derivation in Go is easier to evolve than SQL-heavy interval stitching.

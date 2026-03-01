@@ -18,6 +18,16 @@ const windowTo = ref('')
 const dateInputRef = ref(null)
 const calendarPopoverRef = ref(null)
 const calendarOpen = ref(false)
+const telegramWidgetRef = ref(null)
+const telegramConfig = ref({
+  enabled: false,
+  botUsername: '',
+  requestAccess: 'write'
+})
+const currentUser = ref(null)
+const authError = ref('')
+
+const telegramCallbackName = 'gridloggerTelegramAuth'
 
 function formatForInput(date) {
   const p = (n) => String(n).padStart(2, '0')
@@ -163,6 +173,17 @@ const currentStatusLabel = computed(() => {
   return labels[currentStatus.value] || 'Невідомо'
 })
 
+const currentUserLabel = computed(() => {
+  if (!currentUser.value) return ''
+  if (currentUser.value.username) {
+    return `@${currentUser.value.username}`
+  }
+
+  const firstName = currentUser.value.firstName || ''
+  const lastName = currentUser.value.lastName || ''
+  return `${firstName} ${lastName}`.trim() || 'Telegram'
+})
+
 const windowLabel = computed(() => {
   if (!windowFrom.value || !windowTo.value) return ''
   return `${windowFrom.value.slice(0, 10)} → ${windowTo.value.slice(0, 10)}`
@@ -297,13 +318,122 @@ async function loadCurrentStatus() {
   currentStatus.value = hit?.status || 'unknown'
 }
 
+async function loadTelegramConfig() {
+  try {
+    const resp = await fetch('/auth/telegram/config', { credentials: 'include' })
+    if (!resp.ok) {
+      telegramConfig.value = { enabled: false, botUsername: '', requestAccess: 'write' }
+      return
+    }
+    const data = await resp.json()
+    telegramConfig.value = {
+      enabled: !!data.enabled,
+      botUsername: data.botUsername || '',
+      requestAccess: data.requestAccess || 'write'
+    }
+  } catch {
+    telegramConfig.value = { enabled: false, botUsername: '', requestAccess: 'write' }
+  }
+}
+
+async function loadMe() {
+  try {
+    const resp = await fetch('/me', { credentials: 'include' })
+    if (resp.status === 401) {
+      currentUser.value = null
+      return
+    }
+    if (!resp.ok) {
+      currentUser.value = null
+      return
+    }
+    const data = await resp.json()
+    currentUser.value = data.user || null
+  } catch {
+    currentUser.value = null
+  }
+}
+
+function clearTelegramWidget() {
+  if (telegramWidgetRef.value) {
+    telegramWidgetRef.value.innerHTML = ''
+  }
+}
+
+function renderTelegramWidget() {
+  clearTelegramWidget()
+  if (!telegramConfig.value.enabled || !telegramConfig.value.botUsername || currentUser.value) {
+    return
+  }
+  if (!telegramWidgetRef.value) {
+    return
+  }
+
+  window[telegramCallbackName] = async (user) => {
+    try {
+      authError.value = ''
+      const body = new URLSearchParams()
+      for (const [key, value] of Object.entries(user || {})) {
+        if (value === undefined || value === null) continue
+        body.append(key, String(value))
+      }
+
+      const resp = await fetch('/auth/telegram/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        credentials: 'include',
+        body
+      })
+      if (!resp.ok) {
+        throw new Error(await resp.text())
+      }
+      const data = await resp.json()
+      currentUser.value = data.user || null
+      clearTelegramWidget()
+    } catch (e) {
+      authError.value = e.message || 'Не вдалося увійти через Telegram'
+    }
+  }
+
+  const script = document.createElement('script')
+  script.async = true
+  script.src = 'https://telegram.org/js/telegram-widget.js?22'
+  script.setAttribute('data-telegram-login', telegramConfig.value.botUsername)
+  script.setAttribute('data-size', 'medium')
+  script.setAttribute('data-userpic', 'false')
+  script.setAttribute('data-request-access', telegramConfig.value.requestAccess)
+  script.setAttribute('data-onauth', `${telegramCallbackName}(user)`)
+  telegramWidgetRef.value.appendChild(script)
+}
+
+async function logout() {
+  try {
+    await fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'include'
+    })
+  } finally {
+    currentUser.value = null
+    authError.value = ''
+    renderTelegramWidget()
+  }
+}
+
 onMounted(() => {
   loadAvailability()
+  loadTelegramConfig().then(() => {
+    loadMe().then(() => {
+      renderTelegramWidget()
+    })
+  })
   document.addEventListener('pointerdown', handleOutsidePointerDown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutsidePointerDown)
+  delete window[telegramCallbackName]
 })
 </script>
 
@@ -312,9 +442,17 @@ onBeforeUnmount(() => {
     <div class="topbar">
       <p class="kicker">Svitlo.🏘️</p>
       <div class="topbar-actions">
-        <button class="login-link" type="button">Увійти</button>
+        <template v-if="currentUser">
+          <span class="user-chip">{{ currentUserLabel }}</span>
+          <button class="login-link" type="button" @click="logout">Вийти</button>
+        </template>
+        <div v-else-if="telegramConfig.enabled" class="telegram-widget-wrap">
+          <div ref="telegramWidgetRef"></div>
+        </div>
+        <span v-else class="auth-muted">Вхід через Telegram недоступний</span>
       </div>
     </div>
+    <p v-if="authError" class="error auth-error">{{ authError }}</p>
 
     <header class="hero">
       <div>
@@ -336,11 +474,11 @@ onBeforeUnmount(() => {
         <p>Наявність у цьому інтервалі</p>
       </article>
       <article>
-        <h2>{{ stats.totalAvailableHours.toFixed(1) }} h</h2>
+        <h2>{{ stats.totalAvailableHours.toFixed(1) }} год</h2>
         <p>Загалом зі світлом</p>
       </article>
       <article>
-        <h2>{{ stats.totalOutageHours.toFixed(1) }} h</h2>
+        <h2>{{ stats.totalOutageHours.toFixed(1) }} год</h2>
         <p>Загалом без світла</p>
       </article>
     </section>
@@ -424,6 +562,5 @@ onBeforeUnmount(() => {
 
     <p v-if="loading">Завантаження…</p>
     <p v-if="error" class="error">{{ error }}</p>
-    <footer class="page-footer" aria-label="Україна">🇺🇦</footer>
   </main>
 </template>

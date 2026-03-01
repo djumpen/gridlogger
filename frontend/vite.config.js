@@ -10,6 +10,14 @@ export default defineConfig({
       '/api': {
         target: 'http://backend:8080',
         changeOrigin: true
+      },
+      '/auth': {
+        target: 'http://backend:8080',
+        changeOrigin: true
+      },
+      '/me': {
+        target: 'http://backend:8080',
+        changeOrigin: true
       }
     }
   }

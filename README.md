@@ -35,6 +35,15 @@ Response includes:
 - `GET /healthz`
 - `GET /readyz`
 
+### Telegram auth
+
+- `GET /auth/telegram/config`
+- `POST /auth/telegram/callback`
+- `GET /me`
+- `POST /auth/logout`
+
+Setup and security details: `docs/telegram-auth.md`
+
 ## Local run
 
 Prerequisites:
@@ -99,6 +108,14 @@ Environment variables:
 - `LISTEN_ADDR` (default `:8080`)
 - `OUTAGE_THRESHOLD_SECONDS` (default `120`)
 - `DEFAULT_PROJECT_ID` (default `1`)
+- `TELEGRAM_BOT_TOKEN` (required to enable Telegram login)
+- `TELEGRAM_BOT_USERNAME` (required to enable Telegram login)
+- `TELEGRAM_AUTH_TTL_SECONDS` (default `86400`)
+- `JWT_SECRET` (required to enable Telegram login, min 32 chars)
+- `JWT_ISSUER` (default `gridlogger`)
+- `SESSION_TTL_SECONDS` (default `604800`)
+- `SESSION_COOKIE_NAME` (default `gridlogger_session`)
+- `SESSION_COOKIE_SECURE` (default `false`, set `true` in production HTTPS)
 
 Frontend assumptions:
 - Timezone baseline for display is `Europe/Kyiv`.

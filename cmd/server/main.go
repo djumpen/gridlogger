@@ -13,6 +13,7 @@ import (
 	"github.com/djumpen/gridlogger/internal/db"
 	"github.com/djumpen/gridlogger/internal/httpapi"
 	"github.com/djumpen/gridlogger/internal/service"
+	_ "github.com/newrelic/go-agent/v3/newrelic"
 )
 
 func main() {
@@ -21,7 +22,18 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	log.Printf("test config: %+v\n", cfg.TestEnv)
+	log.Println("starting...")
+
+	// app, err := newrelic.NewApplication(
+	// 	newrelic.ConfigAppName("gridlogger"),
+	// 	newrelic.ConfigLicense("eu01xx73d7b18295cb187b5491a4004aFFFFNRAL"),
+	// 	newrelic.ConfigAppLogForwardingEnabled(true),
+	// )
+
+	// http.HandleFunc(newrelic.WrapHandleFunc(app, "/users", usersHandler))
+
+	//txn := app.StartTransaction("transaction_name")
+	//defer txn.End()
 
 	ctx := context.Background()
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
@@ -36,7 +48,19 @@ func main() {
 
 	repo := db.NewPingRepository(pool)
 	svc := service.NewAvailabilityService(repo, cfg.OutageThreshold)
-	h := httpapi.NewHandler(svc, cfg.DefaultProjectID)
+	telegramRepo := db.NewTelegramAccountRepository(pool)
+	telegramAuth := service.NewTelegramAuthService(telegramRepo, cfg.TelegramBotToken, cfg.TelegramAuthTTL)
+	sessionAuth := service.NewSessionService(cfg.JWTSecret, cfg.JWTIssuer, cfg.SessionTTL)
+	h := httpapi.NewHandler(
+		svc,
+		telegramAuth,
+		sessionAuth,
+		cfg.DefaultProjectID,
+		cfg.TelegramBotUsername,
+		cfg.SessionCookieName,
+		cfg.SessionCookieSecure,
+		cfg.SessionTTL,
+	)
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,

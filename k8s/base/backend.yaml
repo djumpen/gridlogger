@@ -37,6 +37,31 @@ spec:
             secretKeyRef:
               name: gridlogger-secrets
               key: TEST_ENV
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: TELEGRAM_BOT_TOKEN
+        - name: TELEGRAM_BOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: TELEGRAM_BOT_USERNAME
+        - name: TELEGRAM_AUTH_TTL_SECONDS
+          value: "86400"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: JWT_SECRET
+        - name: JWT_ISSUER
+          value: "gridlogger"
+        - name: SESSION_TTL_SECONDS
+          value: "604800"
+        - name: SESSION_COOKIE_NAME
+          value: "gridlogger_session"
+        - name: SESSION_COOKIE_SECURE
+          value: "true"
         readinessProbe:
           httpGet:
             path: /readyz
