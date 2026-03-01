@@ -32,6 +32,11 @@ spec:
             secretKeyRef:
               name: gridlogger-secrets
               key: DATABASE_URL
+        - name: TEST_ENV
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: TEST_ENV
         readinessProbe:
           httpGet:
             path: /readyz

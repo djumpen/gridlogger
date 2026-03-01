@@ -27,9 +27,9 @@ function formatForInput(date) {
 const selectedDate = ref(formatForInput(new Date()))
 
 const viewOptions = [
-  { label: 'Day', value: 'day' },
-  { label: 'Week', value: 'week' },
-  { label: 'Month', value: 'month' }
+  { label: 'День', value: 'day' },
+  { label: 'Тиждень', value: 'week' },
+  { label: 'Місяць', value: 'month' }
 ]
 
 const xAxisTicks = [0, 2, 4, 6, 8, 10, 12]
@@ -152,32 +152,49 @@ const groupedByDay = computed(() => {
   return out
 })
 
-const currentStatus = computed(() => {
-  if (!windowFrom.value || !windowTo.value || !intervals.value.length) {
-    return 'unknown'
+const currentStatus = ref('unknown')
+const currentStatusLabel = computed(() => {
+  const labels = {
+    available: 'Є світло',
+    outage: 'Немає світла',
+    future: 'Майбутній період',
+    unknown: 'Невідомо'
   }
-
-  const now = new Date()
-  const from = new Date(windowFrom.value)
-  const to = new Date(windowTo.value)
-  if (now < from || now >= to) {
-    return 'outside window'
-  }
-
-  for (const iv of intervals.value) {
-    const start = new Date(iv.start)
-    const end = new Date(iv.end)
-    if (now >= start && now < end) {
-      return iv.status
-    }
-  }
-
-  return 'unknown'
+  return labels[currentStatus.value] || 'Невідомо'
 })
 
 const windowLabel = computed(() => {
   if (!windowFrom.value || !windowTo.value) return ''
   return `${windowFrom.value.slice(0, 10)} → ${windowTo.value.slice(0, 10)}`
+})
+
+function computeWindowForDate(date, mode) {
+  const base = new Date(date)
+  base.setHours(0, 0, 0, 0)
+  let from = new Date(base)
+  let to = new Date(base)
+
+  if (mode === 'day') {
+    to.setDate(to.getDate() + 1)
+  }
+  if (mode === 'week') {
+    const day = from.getDay() || 7
+    from.setDate(from.getDate() - (day - 1))
+    to = new Date(from)
+    to.setDate(to.getDate() + 7)
+  }
+  if (mode === 'month') {
+    from = new Date(base.getFullYear(), base.getMonth(), 1)
+    to = new Date(base.getFullYear(), base.getMonth() + 1, 1)
+  }
+
+  return { from, to }
+}
+
+const isCurrentIntervalSelected = computed(() => {
+  const selected = computeWindowForDate(new Date(`${selectedDate.value}T00:00:00`), view.value)
+  const now = computeWindowForDate(new Date(), view.value)
+  return selected.from.getTime() === now.from.getTime() && selected.to.getTime() === now.to.getTime()
 })
 
 function openDatePicker() {
@@ -197,6 +214,29 @@ function handleDateChange() {
   closeDatePicker()
 }
 
+function shiftWindow(step) {
+  const current = new Date(`${selectedDate.value}T00:00:00`)
+  if (Number.isNaN(current.getTime())) return
+
+  if (view.value === 'day') {
+    current.setDate(current.getDate() + step)
+  }
+  if (view.value === 'week') {
+    current.setDate(current.getDate() + (step * 7))
+  }
+  if (view.value === 'month') {
+    current.setMonth(current.getMonth() + step)
+  }
+
+  selectedDate.value = formatForInput(current)
+  loadAvailability()
+}
+
+function goToCurrentWindow() {
+  selectedDate.value = formatForInput(new Date())
+  loadAvailability()
+}
+
 function handleOutsidePointerDown(event) {
   if (!calendarOpen.value) return
   if (calendarPopoverRef.value?.contains(event.target)) return
@@ -204,28 +244,11 @@ function handleOutsidePointerDown(event) {
 }
 
 function computeWindow() {
-  const base = new Date(`${selectedDate.value}T00:00:00`)
-  if (Number.isNaN(base.getTime())) {
-    throw new Error('Invalid date')
+  const seed = new Date(`${selectedDate.value}T00:00:00`)
+  if (Number.isNaN(seed.getTime())) {
+    throw new Error('Некоректна дата')
   }
-  let from = new Date(base)
-  let to = new Date(base)
-
-  if (view.value === 'day') {
-    to.setDate(to.getDate() + 1)
-  }
-  if (view.value === 'week') {
-    const day = from.getDay() || 7
-    from.setDate(from.getDate() - (day - 1))
-    to = new Date(from)
-    to.setDate(to.getDate() + 7)
-  }
-  if (view.value === 'month') {
-    from = new Date(base.getFullYear(), base.getMonth(), 1)
-    to = new Date(base.getFullYear(), base.getMonth() + 1, 1)
-  }
-
-  return { from, to }
+  return computeWindowForDate(seed, view.value)
 }
 
 async function loadAvailability() {
@@ -244,11 +267,34 @@ async function loadAvailability() {
     const data = await resp.json()
     intervals.value = data.intervals
     stats.value = data.stats
+    await loadCurrentStatus()
   } catch (e) {
-    error.value = e.message || 'Failed to load availability'
+    error.value = e.message || 'Не вдалося завантажити дані'
+    currentStatus.value = 'unknown'
   } finally {
     loading.value = false
   }
+}
+
+async function loadCurrentStatus() {
+  const now = new Date()
+  const from = new Date(now.getTime() - (3 * 60 * 60 * 1000))
+  const to = new Date(now.getTime() + 60 * 1000)
+  const url = `/api/projects/${projectId}/availability?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    currentStatus.value = 'unknown'
+    return
+  }
+
+  const data = await resp.json()
+  const nowTs = now.getTime()
+  const hit = (data.intervals || []).find((iv) => {
+    const start = new Date(iv.start).getTime()
+    const end = new Date(iv.end).getTime()
+    return nowTs >= start && nowTs < end
+  })
+  currentStatus.value = hit?.status || 'unknown'
 }
 
 onMounted(() => {
@@ -266,16 +312,14 @@ onBeforeUnmount(() => {
     <div class="topbar">
       <p class="kicker">Svitlo.🏘️</p>
       <div class="topbar-actions">
-        <select class="lang-select" aria-label="Language selector">
-          <option value="en">🇬🇧 EN</option>
-        </select>
-        <button class="login-link" type="button">Login</button>
+        <button class="login-link" type="button">Увійти</button>
       </div>
     </div>
 
     <header class="hero">
       <div>
         <h1>Коновальця 36Б</h1>
+        <p class="sub">м. Київ. Ввод #1</p>
       </div>
     </header>
 
@@ -283,28 +327,28 @@ onBeforeUnmount(() => {
       <article>
         <h2 class="current-status-row" :class="`status-${currentStatus.replace(' ', '-')}`">
           <span class="status-dot" aria-hidden="true"></span>
-          <span>{{ currentStatus }}</span>
+          <span>{{ currentStatusLabel }}</span>
         </h2>
-        <p>Current status</p>
+        <p>Поточний стан</p>
       </article>
       <article>
         <h2>{{ stats.availabilityPercent.toFixed(1) }}%</h2>
-        <p>Availability in visible window</p>
+        <p>Наявність у цьому інтервалі</p>
       </article>
       <article>
         <h2>{{ stats.totalAvailableHours.toFixed(1) }} h</h2>
-        <p>Total available</p>
+        <p>Загалом зі світлом</p>
       </article>
       <article>
         <h2>{{ stats.totalOutageHours.toFixed(1) }} h</h2>
-        <p>Total outage</p>
+        <p>Загалом без світла</p>
       </article>
     </section>
 
     <section class="calendar" v-if="!loading && !error">
       <header>
         <div class="calendar-title-row">
-          <h3>Intervals</h3>
+          <h3>Інтервали</h3>
           <div class="tabs">
             <button
               v-for="item in viewOptions"
@@ -317,9 +361,16 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="window-row">
-          <p>{{ windowLabel }}</p>
+          <button class="nav-btn" type="button" @click="shiftWindow(-1)" aria-label="Попередній інтервал">←</button>
           <div class="calendar-popover-wrap" ref="calendarPopoverRef">
-            <button class="calendar-btn" type="button" @click="openDatePicker" aria-label="Open calendar">📅</button>
+            <button
+              class="window-btn"
+              type="button"
+              @click="openDatePicker"
+              title="Обрати дату для цього інтервалу"
+            >
+              {{ windowLabel }}
+            </button>
             <div v-if="calendarOpen" class="calendar-popover">
               <input
                 ref="dateInputRef"
@@ -329,6 +380,15 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
+          <button class="nav-btn" type="button" @click="shiftWindow(1)" aria-label="Наступний інтервал">→</button>
+          <button
+            v-if="!isCurrentIntervalSelected"
+            class="current-btn"
+            type="button"
+            @click="goToCurrentWindow"
+          >
+            Поточний
+          </button>
         </div>
       </header>
       <div class="rows" v-if="groupedByDay.length">
@@ -359,10 +419,11 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <p v-else>No intervals yet. Send pings to start tracking.</p>
+      <p v-else>Інтервалів ще немає. Надішліть ping, щоб почати відстеження.</p>
     </section>
 
-    <p v-if="loading">Loading…</p>
+    <p v-if="loading">Завантаження…</p>
     <p v-if="error" class="error">{{ error }}</p>
+    <footer class="page-footer" aria-label="Україна">🇺🇦</footer>
   </main>
 </template>
