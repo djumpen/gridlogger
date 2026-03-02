@@ -326,6 +326,10 @@ body {
 }
 
 .settings-project-subscribe {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   white-space: nowrap;
 }
 
@@ -333,6 +337,14 @@ body {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 13px;
+}
+
+.settings-btn-emoji {
+  line-height: 1;
+}
+
+.settings-btn-text {
+  white-space: nowrap;
 }
 
 .primary-btn,
@@ -944,6 +956,27 @@ h1 { margin: 0px 0 8px; }
   }
   .project-notification-controls {
     align-items: flex-start;
+  }
+  .settings-project-main .project-name {
+    display: block;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .settings-project-main .project-city {
+    display: none;
+  }
+  .settings-project-actions {
+    gap: 6px;
+  }
+  .settings-project-actions .secondary-btn {
+    min-width: 38px;
+    width: 38px;
+    padding: 8px 0;
+  }
+  .settings-project-actions .settings-btn-text {
+    display: none;
   }
   .stats {
     grid-template-columns: 1fr;

@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
         {{
           notificationsSaving
             ? 'Оновлення…'
-            : (notificationsSubscribed ? '🛑 Відписатись' : '🔔 Підписатись на оновлення')
+            : (notificationsSubscribed ? '🔕 Відписатись' : '🔔 Підписатись на оновлення')
         }}
       </button>
       <button

@@ -93,7 +93,7 @@ async function loadSubscriptions() {
 }
 
 function subscriptionLabel(projectID) {
-  return subscriptions.value[projectID] ? '🛑 Відписатись' : '🔔 Підписатись'
+  return subscriptions.value[projectID] ? 'Відписатись' : 'Підписатись'
 }
 
 async function toggleProjectSubscription(projectID) {
@@ -224,15 +224,22 @@ async function createProject() {
           <span class="project-city" v-if="project.city">м. {{ project.city }}</span>
         </a>
         <div class="settings-project-actions">
-          <a :href="`/a/settings/project/${project.id}`" class="secondary-btn settings-project-settings">⚙️ Налаштування</a>
+          <a :href="`/a/settings/project/${project.id}`" class="secondary-btn settings-project-settings" title="Налаштування">
+            <span class="settings-btn-emoji" aria-hidden="true">⚙️</span>
+            <span class="settings-btn-text">Налаштування</span>
+          </a>
           <button
             class="secondary-btn settings-project-subscribe"
             :class="{ 'notify-unsubscribe': subscriptions[project.id], 'notify-subscribe': !subscriptions[project.id] }"
             type="button"
             :disabled="subscriptionsLoading[project.id] || subscriptionsSaving[project.id]"
+            :title="subscriptions[project.id] ? 'Відписатись' : 'Підписатись'"
             @click="toggleProjectSubscription(project.id)"
           >
-            {{ subscriptionsSaving[project.id] ? 'Оновлення…' : subscriptionLabel(project.id) }}
+            <span class="settings-btn-emoji" aria-hidden="true">
+              {{ subscriptionsSaving[project.id] ? '⏳' : (subscriptions[project.id] ? '🔕' : '🔔') }}
+            </span>
+            <span class="settings-btn-text">{{ subscriptionsSaving[project.id] ? 'Оновлення…' : subscriptionLabel(project.id) }}</span>
           </button>
         </div>
         <p v-if="subscriptionsError[project.id]" class="error settings-project-error">{{ subscriptionsError[project.id] }}</p>
