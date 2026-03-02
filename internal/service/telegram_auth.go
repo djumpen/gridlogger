@@ -24,6 +24,7 @@ var (
 )
 
 type TelegramAccount struct {
+	UserID       int64     `json:"id"`
 	TelegramID   int64     `json:"telegramId"`
 	Username     string    `json:"username"`
 	FirstName    string    `json:"firstName"`
@@ -49,7 +50,7 @@ type TelegramAccountUpsert struct {
 
 type TelegramAccountStore interface {
 	UpsertTelegramAccount(ctx context.Context, in TelegramAccountUpsert) (TelegramAccount, bool, error)
-	GetTelegramAccountByID(ctx context.Context, telegramID int64) (TelegramAccount, bool, error)
+	GetTelegramAccountByUserID(ctx context.Context, userID int64) (TelegramAccount, bool, error)
 }
 
 type TelegramAuthService struct {
@@ -111,16 +112,16 @@ func (s *TelegramAuthService) Authenticate(ctx context.Context, fields map[strin
 	return account, nil
 }
 
-func (s *TelegramAuthService) GetAccountByID(ctx context.Context, telegramID int64) (TelegramAccount, bool, error) {
+func (s *TelegramAuthService) GetAccountByUserID(ctx context.Context, userID int64) (TelegramAccount, bool, error) {
 	if !s.Enabled() {
 		return TelegramAccount{}, false, ErrTelegramAuthDisabled
 	}
-	if telegramID <= 0 {
+	if userID <= 0 {
 		return TelegramAccount{}, false, ErrTelegramInvalidData
 	}
-	account, found, err := s.store.GetTelegramAccountByID(ctx, telegramID)
+	account, found, err := s.store.GetTelegramAccountByUserID(ctx, userID)
 	if err != nil {
-		return TelegramAccount{}, false, fmt.Errorf("get telegram account: %w", err)
+		return TelegramAccount{}, false, fmt.Errorf("get telegram account by user id: %w", err)
 	}
 	return account, found, nil
 }

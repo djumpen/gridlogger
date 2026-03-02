@@ -19,9 +19,9 @@ var (
 )
 
 type SessionClaims struct {
-	TelegramID int64
-	IssuedAt   time.Time
-	ExpiresAt  time.Time
+	UserID    int64
+	IssuedAt  time.Time
+	ExpiresAt time.Time
 }
 
 type SessionService struct {
@@ -46,11 +46,11 @@ func (s *SessionService) Enabled() bool {
 	return len(s.secret) > 0
 }
 
-func (s *SessionService) IssueToken(telegramID int64) (string, error) {
+func (s *SessionService) IssueToken(userID int64) (string, error) {
 	if !s.Enabled() {
 		return "", ErrSessionDisabled
 	}
-	if telegramID <= 0 {
+	if userID <= 0 {
 		return "", ErrInvalidToken
 	}
 
@@ -58,7 +58,7 @@ func (s *SessionService) IssueToken(telegramID int64) (string, error) {
 	header := map[string]string{"alg": "HS256", "typ": "JWT"}
 	claims := map[string]any{
 		"iss": s.issuer,
-		"sub": strconv.FormatInt(telegramID, 10),
+		"sub": strconv.FormatInt(userID, 10),
 		"iat": now.Unix(),
 		"exp": now.Add(s.ttl).Unix(),
 	}
@@ -130,8 +130,8 @@ func (s *SessionService) ParseToken(token string) (SessionClaims, error) {
 	if payload.Issuer != s.issuer {
 		return SessionClaims{}, ErrInvalidToken
 	}
-	telegramID, err := strconv.ParseInt(payload.Sub, 10, 64)
-	if err != nil || telegramID <= 0 {
+	userID, err := strconv.ParseInt(payload.Sub, 10, 64)
+	if err != nil || userID <= 0 {
 		return SessionClaims{}, ErrInvalidToken
 	}
 
@@ -147,9 +147,9 @@ func (s *SessionService) ParseToken(token string) (SessionClaims, error) {
 	}
 
 	return SessionClaims{
-		TelegramID: telegramID,
-		IssuedAt:   issuedAt,
-		ExpiresAt:  expiresAt,
+		UserID:    userID,
+		IssuedAt:  issuedAt,
+		ExpiresAt: expiresAt,
 	}, nil
 }
 

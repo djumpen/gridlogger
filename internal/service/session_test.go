@@ -21,8 +21,8 @@ func TestSessionServiceIssueAndParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseToken error: %v", err)
 	}
-	if claims.TelegramID != 12345 {
-		t.Fatalf("unexpected telegram id: %d", claims.TelegramID)
+	if claims.UserID != 12345 {
+		t.Fatalf("unexpected user id: %d", claims.UserID)
 	}
 }
 

@@ -59,10 +59,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
 
-	h.mux.HandleFunc("GET /auth/telegram/config", h.handleTelegramConfig)
-	h.mux.HandleFunc("POST /auth/telegram/callback", h.handleTelegramCallback)
-	h.mux.HandleFunc("GET /me", h.handleMe)
-	h.mux.HandleFunc("POST /auth/logout", h.handleLogout)
+	h.mux.HandleFunc("GET /api/auth/telegram/config", h.handleTelegramConfig)
+	h.mux.HandleFunc("POST /api/auth/telegram/callback", h.handleTelegramCallback)
+	h.mux.HandleFunc("GET /api/me", h.handleMe)
+	h.mux.HandleFunc("POST /api/auth/logout", h.handleLogout)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +165,7 @@ func (h *Handler) handleTelegramCallback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	token, err := h.sessionAuth.IssueToken(account.TelegramID)
+	token, err := h.sessionAuth.IssueToken(account.UserID)
 	if err != nil {
 		log.Printf("issue session error: %v", err)
 		http.Error(w, "failed to issue session", http.StatusInternalServerError)
@@ -196,7 +196,7 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, found, err := h.telegramAuth.GetAccountByID(r.Context(), claims.TelegramID)
+	account, found, err := h.telegramAuth.GetAccountByUserID(r.Context(), claims.UserID)
 	if err != nil {
 		log.Printf("load user error: %v", err)
 		http.Error(w, "failed to load user", http.StatusInternalServerError)

@@ -54,7 +54,7 @@ Notes:
 
 ## 4) Security checks implemented
 
-Backend endpoint `POST /auth/telegram/callback` performs:
+Backend endpoint `POST /api/auth/telegram/callback` performs:
 
 - Hash validation per Telegram spec (`HMAC-SHA256` with `sha256(bot_token)` secret).
 - Data-check-string generation using all received fields except `hash`, sorted alphabetically.
@@ -64,27 +64,32 @@ Backend endpoint `POST /auth/telegram/callback` performs:
 
 ## 5) Stored user model
 
-Table: `telegram_accounts`
+Tables:
 
-Columns:
-- `telegram_id` (unique primary key)
-- `username`
-- `first_name`
-- `last_name`
-- `photo_url`
-- `last_auth_date`
-- `last_login_at`
-- `created_at`
-- `updated_at`
-- `is_blocked` (future admin control)
-- `is_admin` (future admin control)
+- `users`
+  - `id` (internal primary key used in sessions)
+  - `telegram_id` (unique, nullable, references `telegram_accounts.telegram_id`)
+  - `created_at`
+  - `updated_at`
+- `telegram_accounts`
+  - `telegram_id` (Telegram identity, primary key)
+  - `username`
+  - `first_name`
+  - `last_name`
+  - `photo_url`
+  - `last_auth_date`
+  - `last_login_at`
+  - `created_at`
+  - `updated_at`
+  - `is_blocked` (future admin control)
+  - `is_admin` (future admin control)
 
 ## 6) API summary
 
-- `GET /auth/telegram/config` - frontend widget config.
-- `POST /auth/telegram/callback` - verify payload, create/update user, issue session.
-- `GET /me` - current logged-in user from cookie or Bearer token.
-- `POST /auth/logout` - clear session cookie.
+- `GET /api/auth/telegram/config` - frontend widget config.
+- `POST /api/auth/telegram/callback` - verify payload, create/update user, issue session.
+- `GET /api/me` - current logged-in user from cookie or Bearer token.
+- `POST /api/auth/logout` - clear session cookie.
 
 ## 7) Common pitfalls
 

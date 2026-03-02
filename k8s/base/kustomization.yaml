@@ -7,4 +7,3 @@ resources:
   - frontend.yaml
   - frontend-svc.yaml
   - ingress.yaml
-  - ingress-http.yaml

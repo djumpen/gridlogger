@@ -320,7 +320,7 @@ async function loadCurrentStatus() {
 
 async function loadTelegramConfig() {
   try {
-    const resp = await fetch('/auth/telegram/config', { credentials: 'include' })
+    const resp = await fetch('/api/auth/telegram/config', { credentials: 'include' })
     if (!resp.ok) {
       telegramConfig.value = { enabled: false, botUsername: '', requestAccess: 'write' }
       return
@@ -338,7 +338,7 @@ async function loadTelegramConfig() {
 
 async function loadMe() {
   try {
-    const resp = await fetch('/me', { credentials: 'include' })
+    const resp = await fetch('/api/me', { credentials: 'include' })
     if (resp.status === 401) {
       currentUser.value = null
       return
@@ -378,7 +378,7 @@ function renderTelegramWidget() {
         body.append(key, String(value))
       }
 
-      const resp = await fetch('/auth/telegram/callback', {
+      const resp = await fetch('/api/auth/telegram/callback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
@@ -410,7 +410,7 @@ function renderTelegramWidget() {
 
 async function logout() {
   try {
-    await fetch('/auth/logout', {
+    await fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include'
     })

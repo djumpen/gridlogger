@@ -25,6 +25,7 @@ func (s *telegramStoreStub) UpsertTelegramAccount(_ context.Context, in Telegram
 	}
 
 	account := TelegramAccount{
+		UserID:       in.TelegramID + 1000,
 		TelegramID:   in.TelegramID,
 		Username:     in.Username,
 		FirstName:    in.FirstName,
@@ -39,9 +40,13 @@ func (s *telegramStoreStub) UpsertTelegramAccount(_ context.Context, in Telegram
 	return account, false, nil
 }
 
-func (s *telegramStoreStub) GetTelegramAccountByID(_ context.Context, telegramID int64) (TelegramAccount, bool, error) {
-	account, ok := s.accounts[telegramID]
-	return account, ok, nil
+func (s *telegramStoreStub) GetTelegramAccountByUserID(_ context.Context, userID int64) (TelegramAccount, bool, error) {
+	for _, account := range s.accounts {
+		if account.UserID == userID {
+			return account, true, nil
+		}
+	}
+	return TelegramAccount{}, false, nil
 }
 
 func TestTelegramAuthServiceAuthenticateSuccess(t *testing.T) {
@@ -65,6 +70,9 @@ func TestTelegramAuthServiceAuthenticateSuccess(t *testing.T) {
 	}
 	if account.TelegramID != 900001 {
 		t.Fatalf("unexpected telegram id: %d", account.TelegramID)
+	}
+	if account.UserID <= 0 {
+		t.Fatalf("unexpected user id: %d", account.UserID)
 	}
 	if account.LastAuthDate != authDate {
 		t.Fatalf("unexpected auth date: %d", account.LastAuthDate)

@@ -37,10 +37,10 @@ Response includes:
 
 ### Telegram auth
 
-- `GET /auth/telegram/config`
-- `POST /auth/telegram/callback`
-- `GET /me`
-- `POST /auth/logout`
+- `GET /api/auth/telegram/config`
+- `POST /api/auth/telegram/callback`
+- `GET /api/me`
+- `POST /api/auth/logout`
 
 Setup and security details: `docs/telegram-auth.md`
 

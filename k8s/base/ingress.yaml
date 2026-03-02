@@ -29,47 +29,4 @@ spec:
             name: backend
             port:
               number: 8080
-      - path: /auth
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8080
-      - path: /me
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8080
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend
-            port:
-              number: 80
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8080
-      - path: /auth
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8080
-      - path: /me
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 8080
+  

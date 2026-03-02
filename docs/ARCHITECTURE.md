@@ -10,13 +10,13 @@
 
 ## Telegram auth flow
 
-1. Frontend loads `GET /auth/telegram/config`.
+1. Frontend loads `GET /api/auth/telegram/config`.
 2. Telegram Login Widget returns signed payload in browser.
-3. Frontend posts payload to `POST /auth/telegram/callback`.
+3. Frontend posts payload to `POST /api/auth/telegram/callback`.
 4. Backend validates hash per Telegram spec and checks `auth_date` TTL.
-5. Backend upserts `telegram_accounts`, rejects replay based on `last_auth_date`.
+5. Backend upserts `telegram_accounts`, links/creates internal `users` row, and rejects replay based on `last_auth_date`.
 6. Backend issues HS256 JWT and sets `HttpOnly` session cookie.
-7. Frontend reads user via `GET /me`.
+7. Frontend reads user via `GET /api/me`.
 
 ## Why compute in backend code
 
