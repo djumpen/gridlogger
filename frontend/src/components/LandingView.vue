@@ -19,7 +19,6 @@ defineProps({
   <section class="landing">
     <header class="hero">
       <div>
-        <h1>Svitlo.Homes</h1>
         <p class="sub">Оберіть будинок зі списку, щоб переглянути стан електропостачання.</p>
       </div>
     </header>

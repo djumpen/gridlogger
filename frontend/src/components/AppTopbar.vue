@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const telegramWidgetRef = ref(null)
@@ -8,17 +8,27 @@ const {
   currentUser,
   currentUserLabel,
   authError,
+  renderTelegramWidget,
   initializeAuth,
   logout,
   disposeAuth
 } = useAuth()
 
 onMounted(async () => {
-  await initializeAuth(telegramWidgetRef.value)
+  await initializeAuth()
 })
 
+watch(
+  [telegramConfig, currentUser, telegramWidgetRef],
+  async () => {
+    await nextTick()
+    renderTelegramWidget(telegramWidgetRef.value)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
-  disposeAuth()
+  disposeAuth(telegramWidgetRef.value)
 })
 </script>
 

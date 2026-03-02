@@ -10,7 +10,6 @@ export function useAuth() {
   const authError = ref('')
 
   const callbackName = 'gridloggerTelegramAuth'
-  let widgetRoot = null
 
   const currentUserLabel = computed(() => {
     if (!currentUser.value) return ''
@@ -23,9 +22,9 @@ export function useAuth() {
     return `${firstName} ${lastName}`.trim() || 'Telegram'
   })
 
-  function clearWidget() {
-    if (widgetRoot) {
-      widgetRoot.innerHTML = ''
+  function clearWidget(rootEl) {
+    if (rootEl) {
+      rootEl.innerHTML = ''
     }
   }
 
@@ -63,9 +62,9 @@ export function useAuth() {
     }
   }
 
-  function renderTelegramWidget() {
-    clearWidget()
-    if (!widgetRoot || !telegramConfig.value.enabled || !telegramConfig.value.botUsername || currentUser.value) {
+  function renderTelegramWidget(rootEl) {
+    clearWidget(rootEl)
+    if (!rootEl || !telegramConfig.value.enabled || !telegramConfig.value.botUsername || currentUser.value) {
       return
     }
 
@@ -92,7 +91,7 @@ export function useAuth() {
 
         const data = await resp.json()
         currentUser.value = data.user || null
-        clearWidget()
+        clearWidget(rootEl)
       } catch (e) {
         authError.value = e.message || 'Не вдалося увійти через Telegram'
       }
@@ -106,14 +105,12 @@ export function useAuth() {
     script.setAttribute('data-userpic', 'false')
     script.setAttribute('data-request-access', telegramConfig.value.requestAccess)
     script.setAttribute('data-onauth', `${callbackName}(user)`)
-    widgetRoot.appendChild(script)
+    rootEl.appendChild(script)
   }
 
-  async function initializeAuth(rootEl) {
-    widgetRoot = rootEl
+  async function initializeAuth() {
     await loadTelegramConfig()
     await loadMe()
-    renderTelegramWidget()
   }
 
   async function logout() {
@@ -125,14 +122,12 @@ export function useAuth() {
     } finally {
       currentUser.value = null
       authError.value = ''
-      renderTelegramWidget()
     }
   }
 
-  function disposeAuth() {
-    clearWidget()
+  function disposeAuth(rootEl) {
+    clearWidget(rootEl)
     delete window[callbackName]
-    widgetRoot = null
   }
 
   return {
@@ -140,6 +135,7 @@ export function useAuth() {
     currentUser,
     currentUserLabel,
     authError,
+    renderTelegramWidget,
     initializeAuth,
     logout,
     disposeAuth
