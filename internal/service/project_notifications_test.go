@@ -48,7 +48,7 @@ func TestBuildProjectStatusNotificationMessage(t *testing.T) {
 	if outage == "" {
 		t.Fatal("outage message is empty")
 	}
-	if !strings.HasPrefix(outage, "🔴 Зникло світло: ") {
+	if !strings.HasPrefix(outage, "🔴 Світло відсутнє: ") {
 		t.Fatalf("unexpected outage prefix: %q", outage)
 	}
 	if !strings.Contains(outage, "\nСвітло було доступне 2год 30хв\n") {

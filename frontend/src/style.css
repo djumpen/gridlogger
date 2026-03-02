@@ -300,6 +300,41 @@ body {
   margin-top: 14px;
 }
 
+.settings-project-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.settings-project-main {
+  min-width: 0;
+}
+
+.settings-project-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.settings-project-actions {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.settings-project-subscribe {
+  white-space: nowrap;
+}
+
+.settings-project-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+}
+
 .primary-btn,
 .secondary-btn {
   border-radius: 999px;

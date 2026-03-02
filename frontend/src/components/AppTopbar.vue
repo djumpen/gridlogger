@@ -49,6 +49,7 @@ function toggleUserMenu() {
 async function handleLogout() {
   userMenuOpen.value = false
   await logout()
+  window.location.href = '/'
 }
 
 function handleOutsidePointerDown(event) {

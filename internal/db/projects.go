@@ -58,7 +58,7 @@ func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int
 		SELECT id, name, slug, user_id, city, description, created_at
 		FROM projects
 		WHERE user_id = $1
-		ORDER BY created_at DESC, id DESC
+		ORDER BY id ASC
 	`
 
 	rows, err := r.pool.Query(ctx, q, userID)
