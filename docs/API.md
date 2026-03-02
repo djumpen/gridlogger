@@ -44,9 +44,83 @@ Success `200` example:
 }
 ```
 
+## GET `/api/settings`
+
+Returns authenticated user project list for settings page.
+
+Errors:
+- `401` unauthorized
+- `403` blocked user
+
+## POST `/api/settings/projects`
+
+Creates a new project for authenticated user.
+
+Request JSON:
+
+```json
+{
+  "name": "Лесі Українки 8Б",
+  "city": "Київ",
+  "slug": "lesi-8b"
+}
+```
+
+Success `201` example:
+
+```json
+{
+  "project": {
+    "id": 12,
+    "name": "Лесі Українки 8Б",
+    "slug": "lesi-8b",
+    "city": "Київ"
+  },
+  "redirectTo": "/a/settings/project/12"
+}
+```
+
+Errors:
+- `400` invalid fields / slug format
+- `401` unauthorized
+- `403` blocked user
+- `409` slug already exists
+
+Slug rules:
+- at least 3 chars
+- only `a-z`, `0-9`, `-`
+- reserved value `api` is not allowed
+
+## GET `/api/settings/projects/{projectId}`
+
+Returns owner project details (including project `secret`).
+
+Errors:
+- `401` unauthorized
+- `403` forbidden (not owner)
+- `404` not found
+
+## POST `/api/settings/projects/{projectId}`
+
+Updates owner project fields (`name`, `city`, `slug`).
+
+Errors:
+- `400` invalid fields / slug format
+- `401` unauthorized
+- `403` forbidden (not owner)
+- `404` not found
+- `409` slug already exists
+
 ## POST `/api/projects/{projectId}/ping`
 
 Records a ping using server arrival timestamp.
+
+Optional header:
+- `X-Project-Secret`
+
+Current behavior:
+- Missing or wrong header only writes warning log.
+- Request is still accepted (`204`).
 
 Success:
 - `204 No Content`

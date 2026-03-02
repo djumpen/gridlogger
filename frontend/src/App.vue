@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import AppTopbar from './components/AppTopbar.vue'
 import LandingView from './components/LandingView.vue'
 import ProjectDashboard from './components/ProjectDashboard.vue'
+import SettingsView from './components/SettingsView.vue'
+import SettingsProjectView from './components/SettingsProjectView.vue'
 import { useProjectCatalog } from './composables/useProjectCatalog'
-import { parseRouteSlug } from './utils/route'
+import { parseAppRoute } from './utils/route'
 
-const routeSlug = ref('')
-const isLandingPage = computed(() => routeSlug.value === '')
+const route = ref({ name: 'landing' })
 
 const {
   projects,
@@ -20,15 +21,22 @@ const {
   loadProjectBySlug
 } = useProjectCatalog()
 
+const isLandingPage = computed(() => route.value.name === 'landing')
+const isPublicProjectPage = computed(() => route.value.name === 'public-project')
+const isSettingsPage = computed(() => route.value.name === 'settings')
+const isSettingsProjectPage = computed(() => route.value.name === 'settings-project')
+
 onMounted(async () => {
-  routeSlug.value = parseRouteSlug()
+  route.value = parseAppRoute()
 
   if (isLandingPage.value) {
     await loadProjectsList()
     return
   }
 
-  await loadProjectBySlug(routeSlug.value)
+  if (isPublicProjectPage.value) {
+    await loadProjectBySlug(route.value.slug)
+  }
 })
 </script>
 
@@ -43,10 +51,19 @@ onMounted(async () => {
       :projects-error="projectsError"
     />
 
-    <template v-else>
+    <SettingsView v-else-if="isSettingsPage" />
+
+    <SettingsProjectView
+      v-else-if="isSettingsProjectPage"
+      :project-id="route.projectId"
+    />
+
+    <template v-else-if="isPublicProjectPage">
       <p v-if="projectLoading">Завантаження проєкту…</p>
       <p v-else-if="projectError" class="error">{{ projectError }}</p>
       <ProjectDashboard v-else-if="currentProject" :project="currentProject" />
     </template>
+
+    <p v-else class="error">Сторінку не знайдено.</p>
   </main>
 </template>

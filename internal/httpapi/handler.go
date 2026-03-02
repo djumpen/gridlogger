@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,12 @@ import (
 	"time"
 
 	"github.com/djumpen/gridlogger/internal/service"
+)
+
+const (
+	projectSecretHeader = "X-Project-Secret"
+	// TODO: Keep disabled until explicit product/security decision to enforce.
+	enforceProjectSecret = false
 )
 
 type Handler struct {
@@ -60,6 +68,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/default-project", h.handleDefaultProject)
 	h.mux.HandleFunc("GET /api/projects", h.handleProjectsList)
 	h.mux.HandleFunc("GET /api/project-slugs/{slug}", h.handleProjectBySlug)
+	h.mux.HandleFunc("GET /api/settings", h.handleSettings)
+	h.mux.HandleFunc("POST /api/settings/projects", h.handleSettingsCreateProject)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}", h.handleSettingsProject)
+	h.mux.HandleFunc("POST /api/settings/projects/{projectId}", h.handleSettingsProjectUpdate)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
@@ -125,6 +137,8 @@ func (h *Handler) handlePingRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.warnOnProjectSecretMismatch(r.Context(), projectID, strings.TrimSpace(r.Header.Get(projectSecretHeader)))
+
 	if err := h.svc.RecordPing(r.Context(), projectID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -160,6 +174,90 @@ func (h *Handler) handleAvailabilityRoute(w http.ResponseWriter, r *http.Request
 		"timezone":    "Europe/Kyiv",
 		"sampleEvery": "30s",
 	})
+}
+
+func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	projects, err := h.projectCatalog.ListByUserID(r.Context(), userID)
+	if err != nil {
+		log.Printf("settings list projects error: user_id=%d err=%v", userID, err)
+		http.Error(w, "failed to load projects", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (h *Handler) handleSettingsCreateProject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+
+	in, err := parseProjectInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	project, err := h.projectCatalog.CreateForUser(r.Context(), userID, in.Name, in.City, in.Slug)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+
+	redirectTo := fmt.Sprintf("/a/settings/project/%d", project.ID)
+	w.Header().Set("Location", redirectTo)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"project":    project,
+		"redirectTo": redirectTo,
+	})
+}
+
+func (h *Handler) handleSettingsProject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	project, err := h.projectCatalog.GetByIDForUser(r.Context(), projectID, userID)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"project": project})
+}
+
+func (h *Handler) handleSettingsProjectUpdate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	in, err := parseProjectInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	project, err := h.projectCatalog.UpdateForUser(r.Context(), userID, projectID, in.Name, in.City, in.Slug)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"project": project})
 }
 
 func (h *Handler) handleTelegramConfig(w http.ResponseWriter, _ *http.Request) {
@@ -332,6 +430,114 @@ func parseWindow(fromRaw, toRaw string) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, errors.New("invalid to")
 	}
 	return from.UTC(), to.UTC(), nil
+}
+
+type projectInput struct {
+	Name string `json:"name"`
+	City string `json:"city"`
+	Slug string `json:"slug"`
+}
+
+func parseProjectInput(r *http.Request) (projectInput, error) {
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.Contains(ct, "application/json") {
+		var in projectInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			return projectInput{}, errors.New("invalid json payload")
+		}
+		return in, nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return projectInput{}, errors.New("invalid form payload")
+	}
+	return projectInput{
+		Name: r.PostForm.Get("name"),
+		City: r.PostForm.Get("city"),
+		Slug: r.PostForm.Get("slug"),
+	}, nil
+}
+
+func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrProjectInvalidData), errors.Is(err, service.ErrProjectInvalidSlug):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrProjectSlugTaken):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, service.ErrProjectNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, service.ErrProjectForbidden):
+		http.Error(w, err.Error(), http.StatusForbidden)
+	default:
+		log.Printf("project request error: %v", err)
+		http.Error(w, "project operation failed", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	if !h.authEnabled() {
+		http.Error(w, "telegram auth is disabled", http.StatusServiceUnavailable)
+		return 0, false
+	}
+
+	token := h.readSessionToken(r)
+	if token == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return 0, false
+	}
+	claims, err := h.sessionAuth.ParseToken(token)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return 0, false
+	}
+
+	account, found, err := h.telegramAuth.GetAccountByUserID(r.Context(), claims.UserID)
+	if err != nil {
+		log.Printf("load user error: %v", err)
+		http.Error(w, "failed to load user", http.StatusInternalServerError)
+		return 0, false
+	}
+	if !found {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return 0, false
+	}
+	if account.IsBlocked {
+		http.Error(w, "account is blocked", http.StatusForbidden)
+		return 0, false
+	}
+	return claims.UserID, true
+}
+
+func (h *Handler) warnOnProjectSecretMismatch(ctx context.Context, projectID int, providedSecret string) {
+	if h.projectCatalog == nil || projectID <= 0 {
+		return
+	}
+
+	project, found, err := h.projectCatalog.GetByID(ctx, projectID)
+	if err != nil {
+		log.Printf("warn ping secret: project lookup failed project_id=%d err=%v", projectID, err)
+		return
+	}
+	if !found {
+		return
+	}
+
+	headerPresent := providedSecret != ""
+	matches := headerPresent && subtle.ConstantTimeCompare([]byte(providedSecret), []byte(project.Secret)) == 1
+	if matches {
+		return
+	}
+
+	log.Printf(
+		"warn ping secret mismatch project_id=%d header_present=%t secret_match=%t enforcement_enabled=%t",
+		projectID,
+		headerPresent,
+		matches,
+		enforceProjectSecret,
+	)
+	if enforceProjectSecret {
+		// TODO: If enforcement is enabled in the future, reject ping with 401/403 here.
+	}
 }
 
 func parseTelegramCallbackPayload(r *http.Request) (map[string]string, error) {

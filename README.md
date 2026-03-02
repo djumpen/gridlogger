@@ -20,6 +20,8 @@ GridLogger tracks power availability from IoT device pings (every ~30s) and visu
 
 - No body.
 - Uses arrival timestamp on server.
+- Optional header: `X-Project-Secret`.
+- Missing/wrong secret currently logs warning only (request is still accepted).
 - `204 No Content` on success.
 
 ### Get availability in window
@@ -39,6 +41,10 @@ Response includes:
 
 - `GET /api/projects` (list for landing page)
 - `GET /api/project-slugs/{slug}` (project lookup for `/{slug}` page)
+- `GET /api/settings` (owner project list for `/a/settings`)
+- `POST /api/settings/projects` (create project)
+- `GET /api/settings/projects/{projectId}` (owner project details)
+- `POST /api/settings/projects/{projectId}` (update owner project)
 
 ### Telegram auth
 
@@ -126,6 +132,8 @@ Frontend assumptions:
 - Timezone baseline for display is `Europe/Kyiv`.
 - `/` renders landing page with project list.
 - `/{slug}` renders selected project dashboard.
+- `/a/settings` renders owner settings list + create flow.
+- `/a/settings/project/{id}` renders project settings/integration tabs.
 
 ## CI/CD
 

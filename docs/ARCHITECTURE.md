@@ -6,9 +6,11 @@
 2. Backend records arrival timestamp in `pings(project_id, ts)`.
 3. Frontend landing (`/`) loads public project catalog via `GET /api/projects`.
 4. Frontend project page (`/{slug}`) resolves project via `GET /api/project-slugs/{slug}`.
-5. Frontend requests availability for a window.
-6. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
-7. Backend returns intervals + stats for the same window.
+5. Owner settings page (`/a/settings`) loads user projects via `GET /api/settings`.
+6. Owner can create/edit projects via `/api/settings/projects` and `/api/settings/projects/{projectId}`.
+7. Frontend requests availability for a window.
+8. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
+9. Backend returns intervals + stats for the same window.
 
 ## Telegram auth flow
 
@@ -29,6 +31,7 @@ This can move to continuous aggregates later if needed.
 
 - Configurable threshold (`OUTAGE_THRESHOLD_SECONDS`, default 120).
 - For a time point `t`, status is `available` if at least one ping exists in `[t-threshold, t]`, otherwise `outage`.
+- Ping endpoint reads optional `X-Project-Secret` and currently logs warning on mismatch without rejecting.
 
 ## Time handling
 

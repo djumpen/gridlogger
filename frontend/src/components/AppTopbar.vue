@@ -3,6 +3,9 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
 const telegramWidgetRef = ref(null)
+const userMenuRef = ref(null)
+const userMenuOpen = ref(false)
+
 const {
   telegramConfig,
   currentUser,
@@ -16,6 +19,7 @@ const {
 
 onMounted(async () => {
   await initializeAuth()
+  document.addEventListener('pointerdown', handleOutsidePointerDown)
 })
 
 watch(
@@ -27,9 +31,31 @@ watch(
   { immediate: true }
 )
 
+watch(currentUser, (user) => {
+  if (!user) {
+    userMenuOpen.value = false
+  }
+})
+
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutsidePointerDown)
   disposeAuth(telegramWidgetRef.value)
 })
+
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+async function handleLogout() {
+  userMenuOpen.value = false
+  await logout()
+}
+
+function handleOutsidePointerDown(event) {
+  if (!userMenuOpen.value) return
+  if (userMenuRef.value?.contains(event.target)) return
+  userMenuOpen.value = false
+}
 </script>
 
 <template>
@@ -37,8 +63,18 @@ onBeforeUnmount(() => {
     <a href="/" class="logo-link" title="На головну">Svitlo.🏘️</a>
     <div class="topbar-actions">
       <template v-if="currentUser">
-        <span class="user-chip">{{ currentUserLabel }}</span>
-        <button class="login-link" type="button" @click="logout">Вийти</button>
+        <a class="topbar-link" href="/a/settings">Мої адреси</a>
+
+        <div class="user-menu-wrap" ref="userMenuRef">
+          <button class="user-menu-btn" type="button" @click="toggleUserMenu">
+            <span>{{ currentUserLabel }}</span>
+            <span class="user-menu-caret">▾</span>
+          </button>
+
+          <div v-if="userMenuOpen" class="user-menu-popover">
+            <button class="user-menu-item" type="button" @click="handleLogout">Вийти</button>
+          </div>
+        </div>
       </template>
       <div v-else-if="telegramConfig.enabled" class="telegram-widget-wrap">
         <div ref="telegramWidgetRef"></div>

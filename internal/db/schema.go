@@ -46,8 +46,12 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			user_id BIGINT NOT NULL REFERENCES users(id),
 			city TEXT NOT NULL DEFAULT '',
 			description TEXT NOT NULL DEFAULT '',
+			secret TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS secret TEXT`,
+		`UPDATE projects SET secret = 'project-' || id::text WHERE secret IS NULL OR secret = ''`,
+		`ALTER TABLE projects ALTER COLUMN secret SET NOT NULL`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug)`,
 		`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)`,
 	}
