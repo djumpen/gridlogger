@@ -54,8 +54,10 @@ body {
   align-items: center;
   flex-wrap: nowrap;
   gap: 12px;
-  margin-bottom: 5px;
+  margin-bottom: 10px;
   min-width: 0;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(42, 54, 68, 0.55);
 }
 
 .logo-link {
@@ -209,6 +211,38 @@ body {
 
 .hero > div {
   min-width: 0;
+}
+
+.project-notification-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.notification-error {
+  margin: 0;
+  font-size: 13px;
+}
+
+.notify-subscribe {
+  border-color: rgba(18, 183, 106, 0.55);
+  background: rgba(18, 183, 106, 0.16);
+}
+
+.notify-subscribe:hover {
+  border-color: rgba(18, 183, 106, 0.75);
+  background: rgba(18, 183, 106, 0.24);
+}
+
+.notify-unsubscribe {
+  border-color: rgba(229, 72, 77, 0.55);
+  background: rgba(229, 72, 77, 0.12);
+}
+
+.notify-unsubscribe:hover {
+  border-color: rgba(229, 72, 77, 0.75);
+  background: rgba(229, 72, 77, 0.2);
 }
 
 .landing {
@@ -872,6 +906,9 @@ h1 { margin: 0px 0 8px; }
   }
   .hero {
     flex-direction: column;
+  }
+  .project-notification-controls {
+    align-items: flex-start;
   }
   .stats {
     grid-template-columns: 1fr;

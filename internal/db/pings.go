@@ -65,3 +65,19 @@ func (r *PingRepository) GetFirstPing(ctx context.Context, projectID int) (time.
 	}
 	return first.Time, true, nil
 }
+
+func (r *PingRepository) GetLastPingAt(ctx context.Context, projectID int) (time.Time, bool, error) {
+	var last sql.NullTime
+	err := r.pool.QueryRow(ctx, `
+		SELECT MAX(ts)
+		FROM pings
+		WHERE project_id = $1
+	`, projectID).Scan(&last)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !last.Valid {
+		return time.Time{}, false, nil
+	}
+	return last.Time.UTC(), true, nil
+}

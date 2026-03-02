@@ -11,6 +11,10 @@ export function useAuth() {
 
   const callbackName = 'gridloggerTelegramAuth'
 
+  function emitAuthChanged() {
+    window.dispatchEvent(new Event('auth-changed'))
+  }
+
   const currentUserLabel = computed(() => {
     if (!currentUser.value) return ''
     if (currentUser.value.username) {
@@ -91,6 +95,7 @@ export function useAuth() {
 
         const data = await resp.json()
         currentUser.value = data.user || null
+        emitAuthChanged()
         clearWidget(rootEl)
       } catch (e) {
         authError.value = e.message || 'Не вдалося увійти через Telegram'
@@ -122,6 +127,7 @@ export function useAuth() {
     } finally {
       currentUser.value = null
       authError.value = ''
+      emitAuthChanged()
     }
   }
 

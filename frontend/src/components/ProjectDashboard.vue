@@ -24,6 +24,11 @@ const windowTo = ref('')
 const dateInputRef = ref(null)
 const calendarPopoverRef = ref(null)
 const calendarOpen = ref(false)
+const notificationsAvailable = ref(false)
+const notificationsLoading = ref(false)
+const notificationsSaving = ref(false)
+const notificationsError = ref('')
+const notificationsSubscribed = ref(false)
 
 const selectedDate = ref(formatForInput(new Date()))
 const viewOptions = [
@@ -246,6 +251,10 @@ function handleOutsidePointerDown(event) {
   closeDatePicker()
 }
 
+function handleAuthChanged() {
+  loadNotificationSubscription()
+}
+
 function computeWindow() {
   const seed = new Date(`${selectedDate.value}T00:00:00`)
   if (Number.isNaN(seed.getTime())) {
@@ -306,19 +315,88 @@ async function loadAvailability() {
   }
 }
 
+async function loadNotificationSubscription() {
+  if (!props.project?.id) return
+
+  notificationsLoading.value = true
+  notificationsError.value = ''
+  notificationsAvailable.value = false
+  notificationsSubscribed.value = false
+
+  try {
+    const meResp = await fetch('/api/me', {
+      credentials: 'include'
+    })
+    if (meResp.status === 401 || meResp.status === 403 || meResp.status === 503) {
+      return
+    }
+    if (!meResp.ok) {
+      throw new Error(await meResp.text())
+    }
+
+    notificationsAvailable.value = true
+    const subResp = await fetch(`/api/projects/${props.project.id}/notifications/subscription`, {
+      credentials: 'include'
+    })
+    if (!subResp.ok) {
+      throw new Error(await subResp.text())
+    }
+    const data = await subResp.json()
+    notificationsSubscribed.value = !!data.subscribed
+  } catch (e) {
+    notificationsError.value = e.message || 'Не вдалося завантажити налаштування сповіщень.'
+  } finally {
+    notificationsLoading.value = false
+  }
+}
+
+async function toggleNotificationSubscription() {
+  if (!props.project?.id || !notificationsAvailable.value) return
+
+  const nextValue = !notificationsSubscribed.value
+  notificationsSaving.value = true
+  notificationsError.value = ''
+
+  try {
+    const resp = await fetch(`/api/projects/${props.project.id}/notifications/subscription`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        subscribed: nextValue
+      })
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    notificationsSubscribed.value = !!data.subscribed
+  } catch (e) {
+    notificationsError.value = e.message || 'Не вдалося оновити підписку на сповіщення.'
+  } finally {
+    notificationsSaving.value = false
+  }
+}
+
 watch(() => props.project?.id, (nextId, prevId) => {
   if (nextId && nextId !== prevId) {
     loadAvailability()
+    loadNotificationSubscription()
   }
 })
 
 onMounted(() => {
   loadAvailability()
+  loadNotificationSubscription()
   document.addEventListener('pointerdown', handleOutsidePointerDown)
+  window.addEventListener('auth-changed', handleAuthChanged)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutsidePointerDown)
+  window.removeEventListener('auth-changed', handleAuthChanged)
 })
 </script>
 
@@ -327,6 +405,34 @@ onBeforeUnmount(() => {
     <div>
       <h1>{{ project.name }}</h1>
       <p class="sub">{{ projectSubtitle }}</p>
+    </div>
+    <div class="project-notification-controls">
+      <button
+        v-if="notificationsAvailable"
+        :class="['secondary-btn', notificationsSubscribed ? 'notify-unsubscribe' : 'notify-subscribe']"
+        type="button"
+        :disabled="notificationsLoading || notificationsSaving"
+        @click="toggleNotificationSubscription"
+      >
+        {{
+          notificationsSaving
+            ? 'Оновлення…'
+            : (notificationsSubscribed ? '🛑 Відписатись' : '🔔 Підписатись на оновлення')
+        }}
+      </button>
+      <button
+        v-else
+        class="secondary-btn"
+        type="button"
+        disabled
+        title="Потрібно увійти через Telegram"
+      >
+        🔔 Підписатись на оновлення
+      </button>
+      <p v-if="!notificationsAvailable && !notificationsLoading" class="sub">
+        Увійдіть через Telegram, щоб керувати сповіщеннями.
+      </p>
+      <p v-if="notificationsError" class="error notification-error">{{ notificationsError }}</p>
     </div>
   </header>
 

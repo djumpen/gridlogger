@@ -45,6 +45,8 @@ Response includes:
 - `POST /api/settings/projects` (create project)
 - `GET /api/settings/projects/{projectId}` (owner project details)
 - `POST /api/settings/projects/{projectId}` (update owner project)
+- `GET /api/projects/{projectId}/notifications/subscription`
+- `POST /api/projects/{projectId}/notifications/subscription`
 
 ### Telegram auth
 
@@ -127,6 +129,8 @@ Environment variables:
 - `SESSION_TTL_SECONDS` (default `604800`)
 - `SESSION_COOKIE_NAME` (default `gridlogger_session`)
 - `SESSION_COOKIE_SECURE` (default `false`, set `true` in production HTTPS)
+- `NOTIFICATIONS_ENABLED` (default `true`)
+- `NOTIFICATION_POLL_SECONDS` (default `30`)
 
 Frontend assumptions:
 - Timezone baseline for display is `Europe/Kyiv`.

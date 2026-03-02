@@ -111,6 +111,49 @@ Errors:
 - `404` not found
 - `409` slug already exists
 
+## GET `/api/projects/{projectId}/notifications/subscription`
+
+Returns current authenticated user subscription for Telegram status notifications.
+
+Response example:
+
+```json
+{
+  "subscribed": true
+}
+```
+
+Errors:
+- `401` unauthorized
+- `403` blocked user
+- `404` project not found
+
+## POST `/api/projects/{projectId}/notifications/subscription`
+
+Creates or updates authenticated user subscription.
+
+Request JSON:
+
+```json
+{
+  "subscribed": true
+}
+```
+
+Response example:
+
+```json
+{
+  "subscribed": true
+}
+```
+
+Errors:
+- `400` invalid payload
+- `401` unauthorized
+- `403` blocked user
+- `404` project not found
+
 ## POST `/api/projects/{projectId}/ping`
 
 Records a ping using server arrival timestamp.

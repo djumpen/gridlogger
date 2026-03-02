@@ -23,21 +23,23 @@ const (
 )
 
 type Handler struct {
-	svc                 *service.AvailabilityService
-	projectCatalog      *service.ProjectCatalogService
-	telegramAuth        *service.TelegramAuthService
-	sessionAuth         *service.SessionService
-	defaultProjectID    int
-	telegramBotUsername string
-	sessionCookieName   string
-	sessionCookieSecure bool
-	sessionTTL          time.Duration
-	mux                 *http.ServeMux
+	svc                  *service.AvailabilityService
+	projectCatalog       *service.ProjectCatalogService
+	projectNotifications *service.ProjectNotificationService
+	telegramAuth         *service.TelegramAuthService
+	sessionAuth          *service.SessionService
+	defaultProjectID     int
+	telegramBotUsername  string
+	sessionCookieName    string
+	sessionCookieSecure  bool
+	sessionTTL           time.Duration
+	mux                  *http.ServeMux
 }
 
 func NewHandler(
 	svc *service.AvailabilityService,
 	projectCatalog *service.ProjectCatalogService,
+	projectNotifications *service.ProjectNotificationService,
 	telegramAuth *service.TelegramAuthService,
 	sessionAuth *service.SessionService,
 	defaultProjectID int,
@@ -47,16 +49,17 @@ func NewHandler(
 	sessionTTL time.Duration,
 ) *Handler {
 	h := &Handler{
-		svc:                 svc,
-		projectCatalog:      projectCatalog,
-		telegramAuth:        telegramAuth,
-		sessionAuth:         sessionAuth,
-		defaultProjectID:    defaultProjectID,
-		telegramBotUsername: telegramBotUsername,
-		sessionCookieName:   sessionCookieName,
-		sessionCookieSecure: sessionCookieSecure,
-		sessionTTL:          sessionTTL,
-		mux:                 http.NewServeMux(),
+		svc:                  svc,
+		projectCatalog:       projectCatalog,
+		projectNotifications: projectNotifications,
+		telegramAuth:         telegramAuth,
+		sessionAuth:          sessionAuth,
+		defaultProjectID:     defaultProjectID,
+		telegramBotUsername:  telegramBotUsername,
+		sessionCookieName:    sessionCookieName,
+		sessionCookieSecure:  sessionCookieSecure,
+		sessionTTL:           sessionTTL,
+		mux:                  http.NewServeMux(),
 	}
 	h.registerRoutes()
 	return h
@@ -72,6 +75,8 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("POST /api/settings/projects", h.handleSettingsCreateProject)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}", h.handleSettingsProject)
 	h.mux.HandleFunc("POST /api/settings/projects/{projectId}", h.handleSettingsProjectUpdate)
+	h.mux.HandleFunc("GET /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionGet)
+	h.mux.HandleFunc("POST /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionPost)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
@@ -260,6 +265,64 @@ func (h *Handler) handleSettingsProjectUpdate(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]any{"project": project})
 }
 
+func (h *Handler) handleProjectNotificationSubscriptionGet(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	subscribed, err := h.projectNotifications.GetSubscriptionForUser(r.Context(), userID, projectID)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscribed": subscribed,
+	})
+}
+
+func (h *Handler) handleProjectNotificationSubscriptionPost(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	in, err := parseSubscriptionInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	subscribed, err := h.projectNotifications.SetSubscriptionForUser(r.Context(), userID, projectID, *in.Subscribed)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscribed": subscribed,
+	})
+}
+
 func (h *Handler) handleTelegramConfig(w http.ResponseWriter, _ *http.Request) {
 	enabled := h.authEnabled()
 	resp := map[string]any{
@@ -326,12 +389,12 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 
 	token := h.readSessionToken(r)
 	if token == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return
 	}
 	claims, err := h.sessionAuth.ParseToken(token)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return
 	}
 
@@ -342,7 +405,7 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !found {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return
 	}
 	if account.IsBlocked {
@@ -438,6 +501,10 @@ type projectInput struct {
 	Slug string `json:"slug"`
 }
 
+type subscriptionInput struct {
+	Subscribed *bool `json:"subscribed"`
+}
+
 func parseProjectInput(r *http.Request) (projectInput, error) {
 	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 	if strings.Contains(ct, "application/json") {
@@ -456,6 +523,33 @@ func parseProjectInput(r *http.Request) (projectInput, error) {
 		City: r.PostForm.Get("city"),
 		Slug: r.PostForm.Get("slug"),
 	}, nil
+}
+
+func parseSubscriptionInput(r *http.Request) (subscriptionInput, error) {
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.Contains(ct, "application/json") {
+		var in subscriptionInput
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			return subscriptionInput{}, errors.New("invalid json payload")
+		}
+		if in.Subscribed == nil {
+			return subscriptionInput{}, errors.New("subscribed is required")
+		}
+		return in, nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		return subscriptionInput{}, errors.New("invalid form payload")
+	}
+	raw := strings.TrimSpace(r.PostForm.Get("subscribed"))
+	if raw == "" {
+		return subscriptionInput{}, errors.New("subscribed is required")
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return subscriptionInput{}, errors.New("subscribed must be true/false")
+	}
+	return subscriptionInput{Subscribed: &v}, nil
 }
 
 func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
@@ -482,12 +576,12 @@ func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, 
 
 	token := h.readSessionToken(r)
 	if token == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return 0, false
 	}
 	claims, err := h.sessionAuth.ParseToken(token)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return 0, false
 	}
 
@@ -498,7 +592,7 @@ func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, 
 		return 0, false
 	}
 	if !found {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "неавторизовано", http.StatusUnauthorized)
 		return 0, false
 	}
 	if account.IsBlocked {

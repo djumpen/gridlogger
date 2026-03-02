@@ -35,14 +35,16 @@ func main() {
 	//txn := app.StartTransaction("transaction_name")
 	//defer txn.End()
 
-	ctx := context.Background()
-	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
+	pool, err := db.NewPool(appCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
 	defer pool.Close()
 
-	if err := db.EnsureSchema(ctx, pool); err != nil {
+	if err := db.EnsureSchema(appCtx, pool); err != nil {
 		log.Fatalf("ensure schema: %v", err)
 	}
 
@@ -50,12 +52,22 @@ func main() {
 	svc := service.NewAvailabilityService(repo, cfg.OutageThreshold)
 	projectRepo := db.NewProjectRepository(pool)
 	projectCatalog := service.NewProjectCatalogService(projectRepo)
+	projectNotificationRepo := db.NewProjectNotificationRepository(pool)
+	telegramBot := service.NewTelegramBotService(cfg.TelegramBotToken)
+	projectNotifications := service.NewProjectNotificationService(
+		projectNotificationRepo,
+		projectCatalog,
+		repo,
+		telegramBot,
+		cfg.OutageThreshold,
+	)
 	telegramRepo := db.NewTelegramAccountRepository(pool)
 	telegramAuth := service.NewTelegramAuthService(telegramRepo, cfg.TelegramBotToken, cfg.TelegramAuthTTL)
 	sessionAuth := service.NewSessionService(cfg.JWTSecret, cfg.JWTIssuer, cfg.SessionTTL)
 	h := httpapi.NewHandler(
 		svc,
 		projectCatalog,
+		projectNotifications,
 		telegramAuth,
 		sessionAuth,
 		cfg.DefaultProjectID,
@@ -64,6 +76,16 @@ func main() {
 		cfg.SessionCookieSecure,
 		cfg.SessionTTL,
 	)
+
+	if cfg.NotificationsEnabled && cfg.TelegramAuthEnabled() {
+		go runProjectNotificationLoop(appCtx, projectNotifications, cfg.NotificationPollInterval)
+	} else {
+		log.Printf(
+			"project notification loop disabled: enabled=%t telegram_auth_enabled=%t",
+			cfg.NotificationsEnabled,
+			cfg.TelegramAuthEnabled(),
+		)
+	}
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
@@ -83,11 +105,32 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
+	appCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown error: %v", err)
+	}
+}
+
+func runProjectNotificationLoop(ctx context.Context, notifications *service.ProjectNotificationService, interval time.Duration) {
+	if notifications == nil {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		if err := notifications.PollAndNotify(ctx); err != nil {
+			log.Printf("project notification poll error: %v", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
