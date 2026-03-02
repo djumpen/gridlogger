@@ -35,6 +35,11 @@ Response includes:
 - `GET /healthz`
 - `GET /readyz`
 
+### Projects catalog
+
+- `GET /api/projects` (list for landing page)
+- `GET /api/project-slugs/{slug}` (project lookup for `/{slug}` page)
+
 ### Telegram auth
 
 - `GET /api/auth/telegram/config`
@@ -119,7 +124,8 @@ Environment variables:
 
 Frontend assumptions:
 - Timezone baseline for display is `Europe/Kyiv`.
-- Default project in UI is `1`.
+- `/` renders landing page with project list.
+- `/{slug}` renders selected project dashboard.
 
 ## CI/CD
 

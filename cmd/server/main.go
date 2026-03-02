@@ -48,11 +48,14 @@ func main() {
 
 	repo := db.NewPingRepository(pool)
 	svc := service.NewAvailabilityService(repo, cfg.OutageThreshold)
+	projectRepo := db.NewProjectRepository(pool)
+	projectCatalog := service.NewProjectCatalogService(projectRepo)
 	telegramRepo := db.NewTelegramAccountRepository(pool)
 	telegramAuth := service.NewTelegramAuthService(telegramRepo, cfg.TelegramBotToken, cfg.TelegramAuthTTL)
 	sessionAuth := service.NewSessionService(cfg.JWTSecret, cfg.JWTIssuer, cfg.SessionTTL)
 	h := httpapi.NewHandler(
 		svc,
+		projectCatalog,
 		telegramAuth,
 		sessionAuth,
 		cfg.DefaultProjectID,

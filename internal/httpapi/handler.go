@@ -16,6 +16,7 @@ import (
 
 type Handler struct {
 	svc                 *service.AvailabilityService
+	projectCatalog      *service.ProjectCatalogService
 	telegramAuth        *service.TelegramAuthService
 	sessionAuth         *service.SessionService
 	defaultProjectID    int
@@ -28,6 +29,7 @@ type Handler struct {
 
 func NewHandler(
 	svc *service.AvailabilityService,
+	projectCatalog *service.ProjectCatalogService,
 	telegramAuth *service.TelegramAuthService,
 	sessionAuth *service.SessionService,
 	defaultProjectID int,
@@ -38,6 +40,7 @@ func NewHandler(
 ) *Handler {
 	h := &Handler{
 		svc:                 svc,
+		projectCatalog:      projectCatalog,
 		telegramAuth:        telegramAuth,
 		sessionAuth:         sessionAuth,
 		defaultProjectID:    defaultProjectID,
@@ -55,6 +58,8 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /healthz", h.handleHealth)
 	h.mux.HandleFunc("GET /readyz", h.handleHealth)
 	h.mux.HandleFunc("GET /api/default-project", h.handleDefaultProject)
+	h.mux.HandleFunc("GET /api/projects", h.handleProjectsList)
+	h.mux.HandleFunc("GET /api/project-slugs/{slug}", h.handleProjectBySlug)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
@@ -75,6 +80,42 @@ func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) handleDefaultProject(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int{"projectId": h.defaultProjectID})
+}
+
+func (h *Handler) handleProjectsList(w http.ResponseWriter, r *http.Request) {
+	if h.projectCatalog == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"projects": []service.Project{}})
+		return
+	}
+
+	projects, err := h.projectCatalog.List(r.Context())
+	if err != nil {
+		log.Printf("list projects error: %v", err)
+		http.Error(w, "failed to list projects", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
+func (h *Handler) handleProjectBySlug(w http.ResponseWriter, r *http.Request) {
+	if h.projectCatalog == nil {
+		http.Error(w, "project not found", http.StatusNotFound)
+		return
+	}
+
+	slug := strings.TrimSpace(r.PathValue("slug"))
+	project, found, err := h.projectCatalog.GetBySlug(r.Context(), slug)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !found {
+		http.Error(w, "project not found", http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"project": project})
 }
 
 func (h *Handler) handlePingRoute(w http.ResponseWriter, r *http.Request) {

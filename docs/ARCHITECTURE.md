@@ -4,9 +4,11 @@
 
 1. Device sends `POST /api/projects/{projectId}/ping` every ~30s.
 2. Backend records arrival timestamp in `pings(project_id, ts)`.
-3. Frontend requests availability for a window.
-4. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
-5. Backend returns intervals + stats for the same window.
+3. Frontend landing (`/`) loads public project catalog via `GET /api/projects`.
+4. Frontend project page (`/{slug}`) resolves project via `GET /api/project-slugs/{slug}`.
+5. Frontend requests availability for a window.
+6. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
+7. Backend returns intervals + stats for the same window.
 
 ## Telegram auth flow
 

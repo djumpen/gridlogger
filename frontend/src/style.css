@@ -58,6 +58,21 @@ body {
   min-width: 0;
 }
 
+.logo-link {
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--accent);
+  margin: 0;
+  text-decoration: none;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.logo-link:hover {
+  color: var(--available);
+  transform: translateY(-1px);
+}
+
 .topbar-actions {
   display: inline-flex;
   align-items: center;
@@ -111,6 +126,53 @@ body {
 
 .hero > div {
   min-width: 0;
+}
+
+.landing {
+  margin-top: 8px;
+}
+
+.landing-note {
+  margin-top: 16px;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+
+.project-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.project-link {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  text-decoration: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  color: var(--text);
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.project-link:hover {
+  border-color: var(--available);
+  background: rgba(18, 183, 106, 0.08);
+  transform: translateY(-1px);
+}
+
+.project-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.project-city {
+  color: var(--muted);
 }
 
 .kicker {

@@ -2,6 +2,48 @@
 
 Base path: `/api`
 
+## GET `/api/projects`
+
+Returns public list of projects for landing page.
+
+Success `200` example:
+
+```json
+{
+  "projects": [
+    {
+      "id": 1,
+      "name": "Коновальця 36Б",
+      "slug": "36b",
+      "userId": 42,
+      "city": "Київ",
+      "description": "Ввод #1",
+      "createdAt": "2026-03-02T10:00:00Z"
+    }
+  ]
+}
+```
+
+## GET `/api/project-slugs/{slug}`
+
+Returns a single project by slug.
+
+Success `200` example:
+
+```json
+{
+  "project": {
+    "id": 1,
+    "name": "Коновальця 36Б",
+    "slug": "36b",
+    "userId": 42,
+    "city": "Київ",
+    "description": "Ввод #1",
+    "createdAt": "2026-03-02T10:00:00Z"
+  }
+}
+```
+
 ## POST `/api/projects/{projectId}/ping`
 
 Records a ping using server arrival timestamp.
