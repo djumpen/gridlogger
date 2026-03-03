@@ -18,8 +18,6 @@ import (
 
 const (
 	projectSecretHeader = "X-Project-Secret"
-	// TODO: Keep disabled until explicit product/security decision to enforce.
-	enforceProjectSecret = false
 )
 
 type Handler struct {
@@ -144,7 +142,10 @@ func (h *Handler) handlePingRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.warnOnProjectSecretMismatch(r.Context(), projectID, strings.TrimSpace(r.Header.Get(projectSecretHeader)))
+	if !h.validateProjectSecret(r.Context(), projectID, strings.TrimSpace(r.Header.Get(projectSecretHeader))) {
+		http.Error(w, "invalid project secret", http.StatusUnauthorized)
+		return
+	}
 
 	if err := h.svc.RecordPing(r.Context(), projectID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -645,36 +646,35 @@ func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, 
 	return claims.UserID, true
 }
 
-func (h *Handler) warnOnProjectSecretMismatch(ctx context.Context, projectID int, providedSecret string) {
+func (h *Handler) validateProjectSecret(ctx context.Context, projectID int, providedSecret string) bool {
 	if h.projectCatalog == nil || projectID <= 0 {
-		return
+		log.Printf("reject ping secret: project catalog is not configured project_id=%d", projectID)
+		return false
 	}
 
 	project, found, err := h.projectCatalog.GetByID(ctx, projectID)
 	if err != nil {
-		log.Printf("warn ping secret: project lookup failed project_id=%d err=%v", projectID, err)
-		return
+		log.Printf("reject ping secret: project lookup failed project_id=%d err=%v", projectID, err)
+		return false
 	}
 	if !found {
-		return
+		log.Printf("reject ping secret: project not found project_id=%d", projectID)
+		return false
 	}
 
 	headerPresent := providedSecret != ""
 	matches := headerPresent && subtle.ConstantTimeCompare([]byte(providedSecret), []byte(project.Secret)) == 1
 	if matches {
-		return
+		return true
 	}
 
 	log.Printf(
-		"warn ping secret mismatch project_id=%d header_present=%t secret_match=%t enforcement_enabled=%t",
+		"reject ping secret mismatch project_id=%d header_present=%t secret_match=%t",
 		projectID,
 		headerPresent,
 		matches,
-		enforceProjectSecret,
 	)
-	if enforceProjectSecret {
-		// TODO: If enforcement is enabled in the future, reject ping with 401/403 here.
-	}
+	return false
 }
 
 func parseTelegramCallbackPayload(r *http.Request) (map[string]string, error) {
