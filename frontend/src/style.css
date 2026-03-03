@@ -312,6 +312,30 @@ body {
   font-weight: 700;
 }
 
+.project-main-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.landing-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: 0 0 9px;
+  background: var(--muted);
+}
+
+.landing-status-dot.status-available {
+  background: var(--available);
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+.landing-status-dot.status-outage {
+  background: var(--outage);
+}
+
 .project-city {
   color: var(--muted);
 }

@@ -75,6 +75,7 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:latest
 
       - name: Build and push firmware image
+        if: contains(github.event.head_commit.message, '--build-firmware')
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -126,6 +127,7 @@ jobs:
           kubectl -n "$K8S_NAMESPACE" set image deployment/backend backend="${BACKEND_IMAGE}:${GITHUB_SHA}"
 
       - name: Update firmware image tag
+        if: contains(github.event.head_commit.message, '--build-firmware')
         run: |
           kubectl -n "$K8S_NAMESPACE" set image deployment/firmware firmware="${FIRMWARE_IMAGE}:${GITHUB_SHA}"
 
@@ -137,6 +139,7 @@ jobs:
         run: kubectl -n "$K8S_NAMESPACE" rollout status deployment/backend --timeout=180s
 
       - name: Wait for firmware rollout
+        if: contains(github.event.head_commit.message, '--build-firmware')
         run: kubectl -n "$K8S_NAMESPACE" rollout status deployment/firmware --timeout=300s
 
       - name: Wait for frontend rollout
