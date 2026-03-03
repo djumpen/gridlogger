@@ -37,6 +37,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      firmware:
+        condition: service_started
     environment:
       LISTEN_ADDR: :8080
       DATABASE_URL: postgres://grid:grid@timescaledb:5432/gridlogger?sslmode=disable
@@ -50,8 +52,29 @@ services:
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-604800}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-gridlogger_session}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      FIRMWARE_BUILD_ENABLED: ${FIRMWARE_BUILD_ENABLED:-true}
+      FIRMWARE_SERVICE_URL: ${FIRMWARE_SERVICE_URL:-http://firmware:8081}
+      FIRMWARE_SERVICE_TOKEN: ${FIRMWARE_SERVICE_TOKEN:-}
+      FIRMWARE_SERVICE_TIMEOUT_SECONDS: ${FIRMWARE_SERVICE_TIMEOUT_SECONDS:-30}
+      FIRMWARE_PING_BASE_URL: ${FIRMWARE_PING_BASE_URL:-https://svitlo.homes}
     ports:
       - "8080:8080"
+
+  firmware:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.firmware
+    environment:
+      LISTEN_ADDR: :8081
+      FIRMWARE_SERVICE_TOKEN: ${FIRMWARE_SERVICE_TOKEN:-}
+      FIRMWARE_BUILD_ENABLED: ${FIRMWARE_BUILD_ENABLED:-true}
+      FIRMWARE_ARDUINO_CLI_PATH: ${FIRMWARE_ARDUINO_CLI_PATH:-arduino-cli}
+      FIRMWARE_BOARD_FQBN: ${FIRMWARE_BOARD_FQBN:-esp32:esp32:esp32c3}
+      FIRMWARE_TEMPLATE_DIR: ${FIRMWARE_TEMPLATE_DIR:-/home/app/firmware/esp32-c3}
+      FIRMWARE_WORK_DIR: ${FIRMWARE_WORK_DIR:-/tmp/gridlogger-firmware}
+      FIRMWARE_BUILD_TIMEOUT_SECONDS: ${FIRMWARE_BUILD_TIMEOUT_SECONDS:-300}
+      FIRMWARE_JOB_TTL_SECONDS: ${FIRMWARE_JOB_TTL_SECONDS:-7200}
 
   frontend:
     build:

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   projectId: {
@@ -16,7 +16,8 @@ const activeTab = ref('settings')
 const form = ref({
   name: '',
   city: '',
-  slug: ''
+  slug: '',
+  isPublic: true
 })
 
 const saving = ref(false)
@@ -31,6 +32,14 @@ const copySuccess = ref('')
 const siteHost = window.location.host || 'svitlo.homes'
 const slugPattern = /^[a-z0-9-]+$/
 const reservedSlug = 'api'
+const firmwareSSID = ref('')
+const firmwarePassword = ref('')
+const firmwarePreparing = ref(false)
+const firmwareError = ref('')
+const firmwareHint = ref('')
+const firmwareManifestURL = ref('')
+const firmwareScriptReady = ref(false)
+const firmwareScriptLoading = ref(false)
 
 const slugError = computed(() => {
   const slug = String(form.value.slug || '').trim().toLowerCase()
@@ -52,6 +61,12 @@ const pingEndpoint = computed(() => `${window.location.origin}/api/projects/${pr
 
 onMounted(() => {
   loadProject()
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'firmware') {
+    void ensureEspWebInstallButton()
+  }
 })
 
 async function loadProject() {
@@ -85,7 +100,8 @@ async function loadProject() {
     form.value = {
       name: project.value?.name || '',
       city: project.value?.city || '',
-      slug: project.value?.slug || ''
+      slug: project.value?.slug || '',
+      isPublic: project.value?.isPublic ?? true
     }
   } catch (e) {
     error.value = e.message || 'Не вдалося завантажити адресу.'
@@ -126,7 +142,8 @@ async function saveProject() {
       body: JSON.stringify({
         name,
         city,
-        slug
+        slug,
+        isPublic: !!form.value.isPublic
       })
     })
 
@@ -137,6 +154,7 @@ async function saveProject() {
     const data = await resp.json()
     project.value = data.project || project.value
     form.value.slug = project.value?.slug || slug
+    form.value.isPublic = project.value?.isPublic ?? form.value.isPublic
     saveSuccess.value = 'Зміни збережено.'
   } catch (e) {
     saveError.value = e.message || 'Не вдалося зберегти зміни.'
@@ -184,6 +202,112 @@ async function deleteProject() {
     deleting.value = false
   }
 }
+
+async function ensureEspWebInstallButton() {
+  if (firmwareScriptReady.value || window.customElements?.get('esp-web-install-button')) {
+    firmwareScriptReady.value = true
+    return
+  }
+  if (firmwareScriptLoading.value) return
+
+  firmwareScriptLoading.value = true
+  firmwareError.value = ''
+
+  try {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.type = 'module'
+      script.src = 'https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module'
+      script.onload = resolve
+      script.onerror = () => reject(new Error('Не вдалося завантажити модуль прошивання ESP.'))
+      document.head.appendChild(script)
+    })
+    firmwareScriptReady.value = !!window.customElements?.get('esp-web-install-button')
+  } catch (e) {
+    firmwareError.value = e.message || 'Не вдалося підготувати інструмент прошивання.'
+  } finally {
+    firmwareScriptLoading.value = false
+  }
+}
+
+function serialSupported() {
+  return window.isSecureContext && typeof navigator !== 'undefined' && !!navigator.serial
+}
+
+async function prepareFirmware() {
+  if (!project.value?.id || firmwarePreparing.value) return
+  const ssid = String(firmwareSSID.value || '').trim()
+  const password = String(firmwarePassword.value || '').trim()
+  if (!ssid || !password) {
+    firmwareError.value = 'Вкажіть SSID та пароль Wi-Fi.'
+    return
+  }
+  if (!serialSupported()) {
+    firmwareError.value = 'Потрібен Chrome у захищеному HTTPS-контексті з підтримкою Web Serial.'
+    return
+  }
+
+  firmwarePreparing.value = true
+  firmwareError.value = ''
+  firmwareHint.value = 'Збираємо прошивку для вашого проєкту…'
+  firmwareManifestURL.value = ''
+
+  try {
+    const startResp = await fetch(`/api/settings/projects/${props.projectId}/firmware/jobs`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ssid,
+        password
+      })
+    })
+    if (!startResp.ok) {
+      throw new Error(await startResp.text())
+    }
+    const started = await startResp.json()
+    const jobID = started?.job?.id
+    if (!jobID) {
+      throw new Error('Сервер не повернув ідентифікатор задачі прошивки.')
+    }
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1500))
+      const statusResp = await fetch(`/api/settings/projects/${props.projectId}/firmware/jobs/${encodeURIComponent(jobID)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
+      if (!statusResp.ok) {
+        throw new Error(await statusResp.text())
+      }
+      const payload = await statusResp.json()
+      const job = payload?.job || {}
+      if (job.status === 'failed') {
+        throw new Error(job.error || 'Не вдалося зібрати прошивку.')
+      }
+      if (job.status === 'succeeded' && job.manifestUrl) {
+        firmwareManifestURL.value = job.manifestUrl
+        firmwareHint.value = 'Прошивка готова. Натисніть кнопку нижче та оберіть ваш ESP32-C3 у Chrome.'
+        await ensureEspWebInstallButton()
+        return
+      }
+      firmwareHint.value = `Збірка прошивки… (${attempt + 1})`
+    }
+
+    throw new Error('Збірка триває занадто довго. Спробуйте ще раз.')
+  } catch (e) {
+    firmwareError.value = e.message || 'Не вдалося підготувати прошивку.'
+    firmwareHint.value = ''
+    firmwareManifestURL.value = ''
+  } finally {
+    firmwarePreparing.value = false
+  }
+}
 </script>
 
 <template>
@@ -207,6 +331,9 @@ async function deleteProject() {
         <button class="settings-tab-btn" :class="{ active: activeTab === 'integration' }" type="button" @click="activeTab = 'integration'">
           Інтеграція
         </button>
+        <button class="settings-tab-btn" :class="{ active: activeTab === 'firmware' }" type="button" @click="activeTab = 'firmware'">
+          Прошивка ESP32
+        </button>
       </div>
 
       <section v-if="activeTab === 'settings'" class="settings-form-card">
@@ -220,6 +347,10 @@ async function deleteProject() {
         <label class="field-label" for="settings-slug">Коротка назва</label>
         <input id="settings-slug" v-model="form.slug" type="text" class="field-input" />
         <p class="helper-text">Цей проєкт буде доступний за адресою {{ siteHost }}/&lt;slug&gt;</p>
+        <label class="field-checkbox">
+          <input v-model="form.isPublic" type="checkbox" />
+          <span>Показувати в загальному списку</span>
+        </label>
 
         <p v-if="slugError" class="error form-error">{{ slugError }}</p>
         <p v-if="saveError" class="error form-error">{{ saveError }}</p>
@@ -236,7 +367,7 @@ async function deleteProject() {
         <p v-if="deleteError" class="error form-error">{{ deleteError }}</p>
       </section>
 
-      <section v-else class="settings-form-card integration-card">
+      <section v-else-if="activeTab === 'integration'" class="settings-form-card integration-card">
         <h2>Інтеграція</h2>
         <p class="sub">Надсилайте ping кожні ~30 секунд, щоб система обчислювала наявність світла.</p>
 
@@ -265,6 +396,31 @@ async function deleteProject() {
         <p class="field-label">Приклад запиту</p>
         <pre class="code-block"><code>curl -X POST '{{ pingEndpoint }}' \
   -H 'X-Project-Secret: {{ revealSecret ? project.secret : "<your-project-secret>" }}'</code></pre>
+      </section>
+
+      <section v-else class="settings-form-card integration-card">
+        <h2>Прошивка ESP32-C3</h2>
+        <p class="sub">Вкажіть Wi-Fi мережу і зберіть індивідуальну прошивку для цієї адреси.</p>
+
+        <label class="field-label" for="firmware-ssid">Wi-Fi SSID</label>
+        <input id="firmware-ssid" v-model="firmwareSSID" type="text" class="field-input" autocomplete="off" />
+
+        <label class="field-label" for="firmware-password">Wi-Fi пароль</label>
+        <input id="firmware-password" v-model="firmwarePassword" type="password" class="field-input" autocomplete="new-password" />
+
+        <div class="settings-form-actions">
+          <button class="primary-btn" type="button" :disabled="firmwarePreparing" @click="prepareFirmware">
+            {{ firmwarePreparing ? 'Підготовка…' : 'Компілювати прошивку' }}
+          </button>
+        </div>
+
+        <p class="helper-text">Працює у Chrome через USB (Web Serial). Після збірки з’явиться кнопка прошивання.</p>
+        <p v-if="firmwareHint" class="sub">{{ firmwareHint }}</p>
+        <p v-if="firmwareError" class="error form-error">{{ firmwareError }}</p>
+
+        <div v-if="firmwareManifestURL && firmwareScriptReady" class="firmware-install-wrap">
+          <esp-web-install-button :manifest="firmwareManifestURL"></esp-web-install-button>
+        </div>
       </section>
     </template>
   </section>

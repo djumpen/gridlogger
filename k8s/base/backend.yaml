@@ -62,6 +62,20 @@ spec:
           value: "gridlogger_session"
         - name: SESSION_COOKIE_SECURE
           value: "true"
+        - name: FIRMWARE_BUILD_ENABLED
+          value: "true"
+        - name: FIRMWARE_SERVICE_URL
+          value: "http://firmware:8081"
+        - name: FIRMWARE_SERVICE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: FIRMWARE_SERVICE_TOKEN
+              optional: true
+        - name: FIRMWARE_SERVICE_TIMEOUT_SECONDS
+          value: "30"
+        - name: FIRMWARE_PING_BASE_URL
+          value: "https://svitlo.homes"
         readinessProbe:
           httpGet:
             path: /readyz

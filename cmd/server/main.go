@@ -61,6 +61,17 @@ func main() {
 		telegramBot,
 		cfg.OutageThreshold,
 	)
+	firmwareClient := service.NewFirmwareBuildClient(
+		cfg.FirmwareServiceURL,
+		cfg.FirmwareServiceToken,
+		cfg.FirmwareServiceTimeout,
+	)
+	firmwareBuilds := service.NewFirmwareGatewayService(
+		cfg.FirmwareBuildEnabled,
+		projectCatalog,
+		firmwareClient,
+		cfg.FirmwarePingBaseURL,
+	)
 	telegramRepo := db.NewTelegramAccountRepository(pool)
 	telegramAuth := service.NewTelegramAuthService(telegramRepo, cfg.TelegramBotToken, cfg.TelegramAuthTTL)
 	sessionAuth := service.NewSessionService(cfg.JWTSecret, cfg.JWTIssuer, cfg.SessionTTL)
@@ -68,6 +79,7 @@ func main() {
 		svc,
 		projectCatalog,
 		projectNotifications,
+		firmwareBuilds,
 		telegramAuth,
 		sessionAuth,
 		cfg.DefaultProjectID,

@@ -18,6 +18,7 @@ Success `200` example:
       "userId": 42,
       "city": "Київ",
       "description": "Ввод #1",
+      "isPublic": true,
       "createdAt": "2026-03-02T10:00:00Z"
     }
   ]
@@ -39,6 +40,7 @@ Success `200` example:
     "userId": 42,
     "city": "Київ",
     "description": "Ввод #1",
+    "isPublic": true,
     "createdAt": "2026-03-02T10:00:00Z"
   }
 }
@@ -62,7 +64,8 @@ Request JSON:
 {
   "name": "Лесі Українки 8Б",
   "city": "Київ",
-  "slug": "lesi-8b"
+  "slug": "lesi-8b",
+  "isPublic": true
 }
 ```
 
@@ -102,7 +105,7 @@ Errors:
 
 ## POST `/api/settings/projects/{projectId}`
 
-Updates owner project fields (`name`, `city`, `slug`).
+Updates owner project fields (`name`, `city`, `slug`, `isPublic`).
 
 Errors:
 - `400` invalid fields / slug format
@@ -158,17 +161,14 @@ Errors:
 
 Records a ping using server arrival timestamp.
 
-Optional header:
+Required header:
 - `X-Project-Secret`
-
-Current behavior:
-- Missing or wrong header only writes warning log.
-- Request is still accepted (`204`).
 
 Success:
 - `204 No Content`
 
 Errors:
+- `401` missing/invalid secret
 - `400` invalid `projectId`
 
 ## GET `/api/projects/{projectId}/availability?from=<RFC3339>&to=<RFC3339>`

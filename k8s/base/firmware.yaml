@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firmware
+  namespace: gridlogger
+  annotations:
+    secrets.infisical.com/auto-reload: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firmware
+  template:
+    metadata:
+      labels:
+        app: firmware
+    spec:
+      containers:
+      - name: firmware
+        image: ghcr.io/djumpen/gridlogger-firmware:latest
+        ports:
+        - containerPort: 8081
+        env:
+        - name: LISTEN_ADDR
+          value: ":8081"
+        - name: FIRMWARE_SERVICE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gridlogger-secrets
+              key: FIRMWARE_SERVICE_TOKEN
+              optional: true
+        - name: FIRMWARE_BUILD_ENABLED
+          value: "true"
+        - name: FIRMWARE_ARDUINO_CLI_PATH
+          value: "arduino-cli"
+        - name: FIRMWARE_BOARD_FQBN
+          value: "esp32:esp32:esp32c3"
+        - name: FIRMWARE_TEMPLATE_DIR
+          value: "/home/app/firmware/esp32-c3"
+        - name: FIRMWARE_WORK_DIR
+          value: "/tmp/gridlogger-firmware"
+        - name: FIRMWARE_BUILD_TIMEOUT_SECONDS
+          value: "300"
+        - name: FIRMWARE_JOB_TTL_SECONDS
+          value: "7200"
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10

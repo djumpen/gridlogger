@@ -20,8 +20,8 @@ GridLogger tracks power availability from IoT device pings (every ~30s) and visu
 
 - No body.
 - Uses arrival timestamp on server.
-- Optional header: `X-Project-Secret`.
-- Missing/wrong secret currently logs warning only (request is still accepted).
+- Required header: `X-Project-Secret`.
+- Missing/wrong secret returns `401 Unauthorized`.
 - `204 No Content` on success.
 
 ### Get availability in window
@@ -39,12 +39,16 @@ Response includes:
 
 ### Projects catalog
 
-- `GET /api/projects` (list for landing page)
+- `GET /api/projects` (list for landing page, only projects with `is_public=true`)
 - `GET /api/project-slugs/{slug}` (project lookup for `/{slug}` page)
 - `GET /api/settings` (owner project list for `/a/settings`)
 - `POST /api/settings/projects` (create project)
 - `GET /api/settings/projects/{projectId}` (owner project details)
 - `POST /api/settings/projects/{projectId}` (update owner project)
+- `POST /api/settings/projects/{projectId}/firmware/jobs` (start ESP32-C3 firmware build)
+- `GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}` (poll firmware build status)
+- `GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/manifest.json?token=...` (ESP Web Tools manifest)
+- `GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/files/{fileName}?token=...` (artifact binary)
 - `GET /api/projects/{projectId}/notifications/subscription`
 - `POST /api/projects/{projectId}/notifications/subscription`
 
@@ -75,7 +79,8 @@ Open:
 Send test ping:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/projects/1/ping
+curl -i -X POST http://localhost:8080/api/projects/1/ping \
+  -H 'X-Project-Secret: <project-secret>'
 ```
 
 ## k3s one-time setup notes
@@ -131,6 +136,19 @@ Environment variables:
 - `SESSION_COOKIE_SECURE` (default `false`, set `true` in production HTTPS)
 - `NOTIFICATIONS_ENABLED` (default `true`)
 - `NOTIFICATION_POLL_SECONDS` (default `30`)
+- `FIRMWARE_BUILD_ENABLED` (default `true`)
+- `FIRMWARE_SERVICE_URL` (default `http://firmware:8081`)
+- `FIRMWARE_SERVICE_TOKEN` (optional shared token between backend and firmware service)
+- `FIRMWARE_SERVICE_TIMEOUT_SECONDS` (default `30`)
+- `FIRMWARE_PING_BASE_URL` (default `https://svitlo.homes`)
+
+Firmware service variables:
+- `FIRMWARE_ARDUINO_CLI_PATH` (default `arduino-cli`)
+- `FIRMWARE_BOARD_FQBN` (default `esp32:esp32:esp32c3`)
+- `FIRMWARE_TEMPLATE_DIR` (default `firmware/esp32-c3`, Docker uses `/home/app/firmware/esp32-c3`)
+- `FIRMWARE_WORK_DIR` (default `/tmp/gridlogger-firmware`)
+- `FIRMWARE_BUILD_TIMEOUT_SECONDS` (default `300`)
+- `FIRMWARE_JOB_TTL_SECONDS` (default `7200`)
 
 Frontend assumptions:
 - Timezone baseline for display is `Europe/Kyiv`.
@@ -145,7 +163,7 @@ GitHub Actions:
 - PR checks: `.github/workflows/ci.yml`
 - Main branch CI/CD: `.github/workflows/ci-cd.yaml`
 
-Main branch pipeline runs tests, builds/pushes backend image to GHCR (`sha` + `latest`), then deploys to k3s using `KUBECONFIG` secret.
+Main branch pipeline runs tests, builds/pushes backend/firmware/frontend images to GHCR (`sha` + `latest`), then deploys to k3s using `KUBECONFIG` secret.
 
 See detailed setup and troubleshooting in `docs/ci-cd-gh-actions.md`.
 
@@ -154,7 +172,9 @@ Secrets management via Infisical is documented in `docs/INFISICAL.md`.
 ## Project layout
 
 - `cmd/server`: API entrypoint
+- `cmd/firmware`: firmware build service entrypoint
 - `internal/httpapi`: HTTP handlers
+- `internal/firmwareapi`: firmware service HTTP handlers
 - `internal/service`: outage/interval logic
 - `internal/db`: PostgreSQL/Timescale access
 - `frontend`: Vue app

@@ -31,23 +31,26 @@ type Project struct {
 	City        string    `json:"city"`
 	Description string    `json:"description"`
 	Secret      string    `json:"secret,omitempty"`
+	IsPublic    bool      `json:"isPublic"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type ProjectCreateInput struct {
-	Name   string
-	Slug   string
-	UserID int64
-	City   string
-	Secret string
+	Name     string
+	Slug     string
+	UserID   int64
+	City     string
+	Secret   string
+	IsPublic bool
 }
 
 type ProjectUpdateInput struct {
-	ID     int
-	Name   string
-	Slug   string
-	City   string
-	UserID int64
+	ID       int
+	Name     string
+	Slug     string
+	City     string
+	UserID   int64
+	IsPublic bool
 }
 
 type ProjectStore interface {
@@ -124,7 +127,7 @@ func (s *ProjectCatalogService) GetByIDForUser(ctx context.Context, projectID in
 	return project, nil
 }
 
-func (s *ProjectCatalogService) CreateForUser(ctx context.Context, userID int64, name, city, slug string) (Project, error) {
+func (s *ProjectCatalogService) CreateForUser(ctx context.Context, userID int64, name, city, slug string, isPublic bool) (Project, error) {
 	if s == nil || s.store == nil {
 		return Project{}, fmt.Errorf("project store is not configured")
 	}
@@ -148,11 +151,12 @@ func (s *ProjectCatalogService) CreateForUser(ctx context.Context, userID int64,
 	}
 
 	project, err := s.store.CreateProject(ctx, ProjectCreateInput{
-		UserID: userID,
-		Name:   name,
-		City:   city,
-		Slug:   slug,
-		Secret: secret,
+		UserID:   userID,
+		Name:     name,
+		City:     city,
+		Slug:     slug,
+		Secret:   secret,
+		IsPublic: isPublic,
 	})
 	if err != nil {
 		return Project{}, err
@@ -160,7 +164,7 @@ func (s *ProjectCatalogService) CreateForUser(ctx context.Context, userID int64,
 	return project, nil
 }
 
-func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64, projectID int, name, city, slug string) (Project, error) {
+func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64, projectID int, name, city, slug string, isPublic bool) (Project, error) {
 	if s == nil || s.store == nil {
 		return Project{}, fmt.Errorf("project store is not configured")
 	}
@@ -184,11 +188,12 @@ func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64,
 	}
 
 	project, err := s.store.UpdateProject(ctx, ProjectUpdateInput{
-		ID:     current.ID,
-		UserID: current.UserID,
-		Name:   name,
-		City:   city,
-		Slug:   slug,
+		ID:       current.ID,
+		UserID:   current.UserID,
+		Name:     name,
+		City:     city,
+		Slug:     slug,
+		IsPublic: isPublic,
 	})
 	if err != nil {
 		return Project{}, err

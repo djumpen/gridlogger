@@ -1,0 +1,32 @@
+FROM golang:1.26-alpine AS build
+WORKDIR /app
+COPY go.mod ./
+COPY go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o /out/firmware ./cmd/firmware
+
+FROM debian:bookworm-slim
+ARG ARDUINO_CLI_VERSION=1.1.1
+ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data
+ENV ARDUINO_DIRECTORIES_DOWNLOADS=/opt/arduino/staging
+ENV ARDUINO_DIRECTORIES_USER=/opt/arduino/user
+ENV FIRMWARE_TEMPLATE_DIR=/home/app/firmware/esp32-c3
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl tar bash python3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL "https://downloads.arduino.cc/arduino-cli/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz" | tar -xz -C /usr/local/bin arduino-cli && \
+    mkdir -p /opt/arduino/data /opt/arduino/staging /opt/arduino/user && \
+    arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json && \
+    arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json && \
+    useradd -m -d /home/app app && \
+    chown -R app:app /opt/arduino
+
+USER app
+WORKDIR /home/app
+COPY --from=build /out/firmware /usr/local/bin/firmware
+COPY --chown=app:app firmware /home/app/firmware
+
+EXPOSE 8081
+CMD ["firmware"]

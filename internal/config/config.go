@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,11 @@ type Config struct {
 	SessionCookieSecure      bool
 	NotificationsEnabled     bool
 	NotificationPollInterval time.Duration
+	FirmwareBuildEnabled     bool
+	FirmwareServiceURL       string
+	FirmwareServiceToken     string
+	FirmwareServiceTimeout   time.Duration
+	FirmwarePingBaseURL      string
 
 	TestEnv string
 }
@@ -40,6 +46,11 @@ func Load() (Config, error) {
 		SessionCookieName:        getenv("SESSION_COOKIE_NAME", "gridlogger_session"),
 		NotificationsEnabled:     true,
 		NotificationPollInterval: 5 * time.Second,
+		FirmwareBuildEnabled:     true,
+		FirmwareServiceURL:       getenv("FIRMWARE_SERVICE_URL", "http://firmware:8081"),
+		FirmwareServiceToken:     strings.TrimSpace(os.Getenv("FIRMWARE_SERVICE_TOKEN")),
+		FirmwareServiceTimeout:   30 * time.Second,
+		FirmwarePingBaseURL:      getenv("FIRMWARE_PING_BASE_URL", "https://svitlo.homes"),
 
 		TestEnv: getenv("TEST_ENV", "Not set"),
 	}
@@ -106,6 +117,28 @@ func Load() (Config, error) {
 			return Config{}, errors.New("NOTIFICATION_POLL_SECONDS must be a positive integer")
 		}
 		cfg.NotificationPollInterval = time.Duration(v) * time.Second
+	}
+
+	if raw := os.Getenv("FIRMWARE_BUILD_ENABLED"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, errors.New("FIRMWARE_BUILD_ENABLED must be true/false")
+		}
+		cfg.FirmwareBuildEnabled = v
+	}
+
+	if raw := os.Getenv("FIRMWARE_SERVICE_TIMEOUT_SECONDS"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			return Config{}, errors.New("FIRMWARE_SERVICE_TIMEOUT_SECONDS must be a positive integer")
+		}
+		cfg.FirmwareServiceTimeout = time.Duration(v) * time.Second
+	}
+	if strings.TrimSpace(cfg.FirmwareServiceURL) == "" {
+		return Config{}, errors.New("FIRMWARE_SERVICE_URL must not be empty")
+	}
+	if strings.TrimSpace(cfg.FirmwarePingBaseURL) == "" {
+		return Config{}, errors.New("FIRMWARE_PING_BASE_URL must not be empty")
 	}
 
 	authFieldCount := 0

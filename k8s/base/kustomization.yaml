@@ -4,6 +4,8 @@ resources:
   - timescaledb-svc.yaml
   - backend.yaml
   - backend-svc.yaml
+  - firmware.yaml
+  - firmware-svc.yaml
   - frontend.yaml
   - frontend-svc.yaml
   - https-redirect-middleware.yaml

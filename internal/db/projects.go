@@ -20,8 +20,9 @@ func NewProjectRepository(pool *pgxpool.Pool) *ProjectRepository {
 
 func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, created_at
+		SELECT id, name, slug, user_id, city, description, is_public, created_at
 		FROM projects
+		WHERE is_public = TRUE
 		ORDER BY name ASC, id ASC
 	`
 
@@ -41,6 +42,7 @@ func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project
 			&p.UserID,
 			&p.City,
 			&p.Description,
+			&p.IsPublic,
 			&p.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -55,7 +57,7 @@ func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project
 
 func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int64) ([]service.Project, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, created_at
+		SELECT id, name, slug, user_id, city, description, is_public, created_at
 		FROM projects
 		WHERE user_id = $1
 		ORDER BY id ASC
@@ -77,6 +79,7 @@ func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int
 			&p.UserID,
 			&p.City,
 			&p.Description,
+			&p.IsPublic,
 			&p.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -91,7 +94,7 @@ func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int
 
 func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (service.Project, bool, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, created_at
+		SELECT id, name, slug, user_id, city, description, is_public, created_at
 		FROM projects
 		WHERE slug = $1
 	`
@@ -104,6 +107,7 @@ func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (
 		&p.UserID,
 		&p.City,
 		&p.Description,
+		&p.IsPublic,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -117,7 +121,7 @@ func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (
 
 func (r *ProjectRepository) GetProjectByID(ctx context.Context, id int) (service.Project, bool, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, secret, created_at
+		SELECT id, name, slug, user_id, city, description, secret, is_public, created_at
 		FROM projects
 		WHERE id = $1
 	`
@@ -131,6 +135,7 @@ func (r *ProjectRepository) GetProjectByID(ctx context.Context, id int) (service
 		&p.City,
 		&p.Description,
 		&p.Secret,
+		&p.IsPublic,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -144,13 +149,13 @@ func (r *ProjectRepository) GetProjectByID(ctx context.Context, id int) (service
 
 func (r *ProjectRepository) CreateProject(ctx context.Context, in service.ProjectCreateInput) (service.Project, error) {
 	const q = `
-		INSERT INTO projects (name, slug, user_id, city, secret)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, name, slug, user_id, city, description, secret, created_at
+		INSERT INTO projects (name, slug, user_id, city, secret, is_public)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, name, slug, user_id, city, description, secret, is_public, created_at
 	`
 
 	var p service.Project
-	err := r.pool.QueryRow(ctx, q, in.Name, in.Slug, in.UserID, in.City, in.Secret).Scan(
+	err := r.pool.QueryRow(ctx, q, in.Name, in.Slug, in.UserID, in.City, in.Secret, in.IsPublic).Scan(
 		&p.ID,
 		&p.Name,
 		&p.Slug,
@@ -158,6 +163,7 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, in service.Projec
 		&p.City,
 		&p.Description,
 		&p.Secret,
+		&p.IsPublic,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -174,13 +180,14 @@ func (r *ProjectRepository) UpdateProject(ctx context.Context, in service.Projec
 		UPDATE projects
 		SET name = $1,
 			slug = $2,
-			city = $3
-		WHERE id = $4
-		RETURNING id, name, slug, user_id, city, description, secret, created_at
+			city = $3,
+			is_public = $4
+		WHERE id = $5
+		RETURNING id, name, slug, user_id, city, description, secret, is_public, created_at
 	`
 
 	var p service.Project
-	err := r.pool.QueryRow(ctx, q, in.Name, in.Slug, in.City, in.ID).Scan(
+	err := r.pool.QueryRow(ctx, q, in.Name, in.Slug, in.City, in.IsPublic, in.ID).Scan(
 		&p.ID,
 		&p.Name,
 		&p.Slug,
@@ -188,6 +195,7 @@ func (r *ProjectRepository) UpdateProject(ctx context.Context, in service.Projec
 		&p.City,
 		&p.Description,
 		&p.Secret,
+		&p.IsPublic,
 		&p.CreatedAt,
 	)
 	if err == nil {

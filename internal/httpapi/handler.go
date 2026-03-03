@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -24,6 +25,7 @@ type Handler struct {
 	svc                  *service.AvailabilityService
 	projectCatalog       *service.ProjectCatalogService
 	projectNotifications *service.ProjectNotificationService
+	firmwareBuilds       *service.FirmwareGatewayService
 	telegramAuth         *service.TelegramAuthService
 	sessionAuth          *service.SessionService
 	defaultProjectID     int
@@ -38,6 +40,7 @@ func NewHandler(
 	svc *service.AvailabilityService,
 	projectCatalog *service.ProjectCatalogService,
 	projectNotifications *service.ProjectNotificationService,
+	firmwareBuilds *service.FirmwareGatewayService,
 	telegramAuth *service.TelegramAuthService,
 	sessionAuth *service.SessionService,
 	defaultProjectID int,
@@ -50,6 +53,7 @@ func NewHandler(
 		svc:                  svc,
 		projectCatalog:       projectCatalog,
 		projectNotifications: projectNotifications,
+		firmwareBuilds:       firmwareBuilds,
 		telegramAuth:         telegramAuth,
 		sessionAuth:          sessionAuth,
 		defaultProjectID:     defaultProjectID,
@@ -75,6 +79,10 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}", h.handleSettingsProject)
 	h.mux.HandleFunc("POST /api/settings/projects/{projectId}", h.handleSettingsProjectUpdate)
 	h.mux.HandleFunc("DELETE /api/settings/projects/{projectId}", h.handleSettingsProjectDelete)
+	h.mux.HandleFunc("POST /api/settings/projects/{projectId}/firmware/jobs", h.handleFirmwareJobCreate)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}", h.handleFirmwareJobGet)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/manifest.json", h.handleFirmwareManifest)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/files/{fileName}", h.handleFirmwareFile)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionGet)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionPost)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
@@ -229,7 +237,7 @@ func (h *Handler) handleSettingsCreateProject(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	project, err := h.projectCatalog.CreateForUser(r.Context(), userID, in.Name, in.City, in.Slug)
+	project, err := h.projectCatalog.CreateForUser(r.Context(), userID, in.Name, in.City, in.Slug, in.IsPublic)
 	if err != nil {
 		h.writeProjectError(w, err)
 		return
@@ -279,7 +287,7 @@ func (h *Handler) handleSettingsProjectUpdate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	project, err := h.projectCatalog.UpdateForUser(r.Context(), userID, projectID, in.Name, in.City, in.Slug)
+	project, err := h.projectCatalog.UpdateForUser(r.Context(), userID, projectID, in.Name, in.City, in.Slug, in.IsPublic)
 	if err != nil {
 		h.writeProjectError(w, err)
 		return
@@ -303,6 +311,136 @@ func (h *Handler) handleSettingsProjectDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleFirmwareJobCreate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.firmwareBuilds == nil {
+		http.Error(w, "firmware builder is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	in, err := parseFirmwareJobCreateInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	job, err := h.firmwareBuilds.StartBuildForUser(r.Context(), userID, projectID, in.SSID, in.Password)
+	if err != nil {
+		h.writeFirmwareError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job": mapJobResponse(projectID, job)})
+}
+
+func (h *Handler) handleFirmwareJobGet(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.firmwareBuilds == nil {
+		http.Error(w, "firmware builder is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jobID := strings.TrimSpace(r.PathValue("jobId"))
+	if jobID == "" {
+		http.Error(w, "jobId is required", http.StatusBadRequest)
+		return
+	}
+
+	job, err := h.firmwareBuilds.GetJobForUser(r.Context(), userID, projectID, jobID)
+	if err != nil {
+		h.writeFirmwareError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"job": mapJobResponse(projectID, job)})
+}
+
+func (h *Handler) handleFirmwareManifest(w http.ResponseWriter, r *http.Request) {
+	if h.firmwareBuilds == nil {
+		http.Error(w, "firmware builder is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jobID := strings.TrimSpace(r.PathValue("jobId"))
+	if jobID == "" {
+		http.Error(w, "jobId is required", http.StatusBadRequest)
+		return
+	}
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Error(w, "token is required", http.StatusUnauthorized)
+		return
+	}
+
+	manifestRaw, err := h.firmwareBuilds.LoadManifestByToken(r.Context(), projectID, jobID, token)
+	if err != nil {
+		h.writeFirmwareError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(manifestRaw)
+}
+
+func (h *Handler) handleFirmwareFile(w http.ResponseWriter, r *http.Request) {
+	if h.firmwareBuilds == nil {
+		http.Error(w, "firmware builder is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jobID := strings.TrimSpace(r.PathValue("jobId"))
+	if jobID == "" {
+		http.Error(w, "jobId is required", http.StatusBadRequest)
+		return
+	}
+	fileName := strings.TrimSpace(r.PathValue("fileName"))
+	if fileName == "" {
+		http.Error(w, "fileName is required", http.StatusBadRequest)
+		return
+	}
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Error(w, "token is required", http.StatusUnauthorized)
+		return
+	}
+
+	reader, contentType, _, err := h.firmwareBuilds.OpenArtifactByToken(r.Context(), projectID, jobID, token, fileName)
+	if err != nil {
+		h.writeFirmwareError(w, err)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Cache-Control", "no-store")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	_, _ = io.Copy(w, reader)
 }
 
 func (h *Handler) handleProjectNotificationSubscriptionGet(w http.ResponseWriter, r *http.Request) {
@@ -539,19 +677,25 @@ func parseWindow(fromRaw, toRaw string) (time.Time, time.Time, error) {
 }
 
 type projectInput struct {
-	Name string `json:"name"`
-	City string `json:"city"`
-	Slug string `json:"slug"`
+	Name     string `json:"name"`
+	City     string `json:"city"`
+	Slug     string `json:"slug"`
+	IsPublic bool   `json:"isPublic"`
 }
 
 type subscriptionInput struct {
 	Subscribed *bool `json:"subscribed"`
 }
 
+type firmwareJobCreateInput struct {
+	SSID     string `json:"ssid"`
+	Password string `json:"password"`
+}
+
 func parseProjectInput(r *http.Request) (projectInput, error) {
 	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 	if strings.Contains(ct, "application/json") {
-		var in projectInput
+		in := projectInput{IsPublic: true}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			return projectInput{}, errors.New("invalid json payload")
 		}
@@ -562,10 +706,23 @@ func parseProjectInput(r *http.Request) (projectInput, error) {
 		return projectInput{}, errors.New("invalid form payload")
 	}
 	return projectInput{
-		Name: r.PostForm.Get("name"),
-		City: r.PostForm.Get("city"),
-		Slug: r.PostForm.Get("slug"),
+		Name:     r.PostForm.Get("name"),
+		City:     r.PostForm.Get("city"),
+		Slug:     r.PostForm.Get("slug"),
+		IsPublic: parseOptionalBoolForm(r.PostForm.Get("is_public"), true),
 	}, nil
+}
+
+func parseOptionalBoolForm(raw string, fallback bool) bool {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func parseSubscriptionInput(r *http.Request) (subscriptionInput, error) {
@@ -595,6 +752,23 @@ func parseSubscriptionInput(r *http.Request) (subscriptionInput, error) {
 	return subscriptionInput{Subscribed: &v}, nil
 }
 
+func parseFirmwareJobCreateInput(r *http.Request) (firmwareJobCreateInput, error) {
+	var in firmwareJobCreateInput
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if !strings.Contains(ct, "application/json") {
+		return firmwareJobCreateInput{}, errors.New("content type must be application/json")
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		return firmwareJobCreateInput{}, errors.New("invalid json payload")
+	}
+	in.SSID = strings.TrimSpace(in.SSID)
+	in.Password = strings.TrimSpace(in.Password)
+	if in.SSID == "" || in.Password == "" {
+		return firmwareJobCreateInput{}, errors.New("ssid and password are required")
+	}
+	return in, nil
+}
+
 func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrProjectInvalidData), errors.Is(err, service.ErrProjectInvalidSlug):
@@ -609,6 +783,48 @@ func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
 		log.Printf("project request error: %v", err)
 		http.Error(w, "project operation failed", http.StatusInternalServerError)
 	}
+}
+
+func (h *Handler) writeFirmwareError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrFirmwareDisabled):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	case errors.Is(err, service.ErrFirmwareInvalidInput), errors.Is(err, service.ErrProjectInvalidData):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrFirmwareForbidden), errors.Is(err, service.ErrProjectForbidden):
+		http.Error(w, err.Error(), http.StatusForbidden)
+	case errors.Is(err, service.ErrFirmwareUnauthorized):
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+	case errors.Is(err, service.ErrFirmwareNotReady):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, service.ErrFirmwareNotFound), errors.Is(err, service.ErrProjectNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	default:
+		log.Printf("firmware request error: %v", err)
+		http.Error(w, "firmware operation failed", http.StatusInternalServerError)
+	}
+}
+
+func mapJobResponse(projectID int, job service.FirmwareJobSnapshot) map[string]any {
+	resp := map[string]any{
+		"id":        job.ID,
+		"projectId": job.ProjectID,
+		"status":    job.Status,
+		"error":     job.Error,
+		"createdAt": job.CreatedAt,
+		"updatedAt": job.UpdatedAt,
+		"expiresAt": job.ExpiresAt,
+		"parts":     job.Parts,
+	}
+	if job.Status == service.FirmwareJobStatusSucceeded && job.ManifestToken != "" {
+		resp["manifestUrl"] = fmt.Sprintf(
+			"/api/settings/projects/%d/firmware/jobs/%s/manifest.json?token=%s",
+			projectID,
+			job.ID,
+			job.ManifestToken,
+		)
+	}
+	return resp
 }
 
 func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {

@@ -15,7 +15,8 @@ const subscriptionsError = ref({})
 const form = ref({
   name: '',
   city: '',
-  slug: ''
+  slug: '',
+  isPublic: true
 })
 
 const siteHost = window.location.host || 'svitlo.homes'
@@ -146,7 +147,8 @@ async function createProject() {
       body: JSON.stringify({
         name,
         city,
-        slug
+        slug,
+        isPublic: !!form.value.isPublic
       })
     })
 
@@ -210,6 +212,10 @@ async function createProject() {
       <label class="field-label" for="project-slug">Коротка назва</label>
       <input id="project-slug" v-model="form.slug" type="text" class="field-input" placeholder="shevchenka-7a" />
       <p class="helper-text">Цей проєкт буде доступний за адресою {{ siteHost }}/&lt;коротка-назва&gt;</p>
+      <label class="field-checkbox">
+        <input v-model="form.isPublic" type="checkbox" />
+        <span>Показувати в загальному списку</span>
+      </label>
       <p v-if="slugError" class="error form-error">{{ slugError }}</p>
       <p v-if="saveError" class="error form-error">{{ saveError }}</p>
 

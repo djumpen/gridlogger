@@ -5,6 +5,9 @@ images:
   - name: ghcr.io/djumpen/gridlogger-backend
     newName: ghcr.io/djumpen/gridlogger-backend
     newTag: latest
+  - name: ghcr.io/djumpen/gridlogger-firmware
+    newName: ghcr.io/djumpen/gridlogger-firmware
+    newTag: latest
   - name: ghcr.io/djumpen/gridlogger-frontend
     newName: ghcr.io/djumpen/gridlogger-frontend
     newTag: latest

@@ -462,6 +462,15 @@ body {
   margin-top: 6px;
 }
 
+.field-checkbox {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
 .settings-form-actions {
   margin-top: 14px;
   display: flex;
@@ -568,6 +577,10 @@ body {
   overflow-x: auto;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.firmware-install-wrap {
+  margin-top: 12px;
 }
 
 .kicker {
