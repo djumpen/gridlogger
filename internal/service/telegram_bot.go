@@ -28,7 +28,7 @@ func (s *TelegramBotService) SendTelegramMessage(ctx context.Context, telegramID
 	if s.token == "" {
 		return fmt.Errorf("telegram bot token is not configured")
 	}
-	if telegramID <= 0 {
+	if telegramID == 0 {
 		return fmt.Errorf("invalid telegram id")
 	}
 	if text == "" {
