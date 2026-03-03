@@ -80,12 +80,12 @@ export function useAuth() {
     }
   }
 
-  async function confirmSession(retries = 3) {
+  async function confirmSession(retries = 15, delayMs = 250) {
     for (let attempt = 0; attempt < retries; attempt += 1) {
       const user = await loadMe()
       if (user) return user
       if (attempt < retries - 1) {
-        await sleep(180)
+        await sleep(delayMs)
       }
     }
     return null
@@ -118,13 +118,17 @@ export function useAuth() {
           throw new Error(await resp.text())
         }
 
-        await resp.json()
-        const confirmedUser = await confirmSession()
-        if (!confirmedUser) {
-          throw new Error('Не вдалося підтвердити вхід. Спробуйте ще раз.')
+        const data = await resp.json()
+        if (data?.user) {
+          currentUser.value = data.user
+          emitAuthChanged()
+          clearWidget(rootEl)
         }
-        emitAuthChanged()
-        clearWidget(rootEl)
+
+        const confirmedUser = await confirmSession()
+        if (confirmedUser) {
+          emitAuthChanged()
+        }
       } catch (e) {
         authError.value = e.message || 'Не вдалося увійти через Telegram'
       }
