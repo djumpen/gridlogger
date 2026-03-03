@@ -29,14 +29,17 @@ defineProps({
 
     <p v-if="projectsLoading">Завантаження…</p>
     <p v-else-if="projectsError" class="error">{{ projectsError }}</p>
-    <ul v-else-if="projects.length" class="project-list">
+    <template v-else-if="projects.length">
+      <h2 class="landing-list-title">Доступні адреси</h2>
+      <ul class="project-list">
       <li v-for="project in projects" :key="project.id">
         <a :href="`/${project.slug}`" class="project-link">
           <span class="project-name">{{ project.name }}</span>
           <span class="project-city" v-if="project.city">м. {{ project.city }}</span>
         </a>
       </li>
-    </ul>
+      </ul>
+    </template>
     <p v-else class="sub">Поки що проєктів немає.</p>
   </section>
 </template>

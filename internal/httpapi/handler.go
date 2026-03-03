@@ -72,9 +72,11 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/projects", h.handleProjectsList)
 	h.mux.HandleFunc("GET /api/project-slugs/{slug}", h.handleProjectBySlug)
 	h.mux.HandleFunc("GET /api/settings", h.handleSettings)
+	h.mux.HandleFunc("GET /api/settings/subscriptions", h.handleSettingsSubscriptions)
 	h.mux.HandleFunc("POST /api/settings/projects", h.handleSettingsCreateProject)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}", h.handleSettingsProject)
 	h.mux.HandleFunc("POST /api/settings/projects/{projectId}", h.handleSettingsProjectUpdate)
+	h.mux.HandleFunc("DELETE /api/settings/projects/{projectId}", h.handleSettingsProjectDelete)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionGet)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionPost)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
@@ -195,6 +197,25 @@ func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
 }
 
+func (h *Handler) handleSettingsSubscriptions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projects, err := h.projectNotifications.ListActiveSubscribedProjectsByUserID(r.Context(), userID)
+	if err != nil {
+		log.Printf("settings list subscriptions error: user_id=%d err=%v", userID, err)
+		http.Error(w, "failed to load subscriptions", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+}
+
 func (h *Handler) handleSettingsCreateProject(w http.ResponseWriter, r *http.Request) {
 	userID, ok := h.requireUserID(w, r)
 	if !ok {
@@ -263,6 +284,24 @@ func (h *Handler) handleSettingsProjectUpdate(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"project": project})
+}
+
+func (h *Handler) handleSettingsProjectDelete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.projectCatalog.DeleteForUser(r.Context(), userID, projectID); err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) handleProjectNotificationSubscriptionGet(w http.ResponseWriter, r *http.Request) {

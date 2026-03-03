@@ -275,6 +275,10 @@ body {
   color: var(--available);
 }
 
+.landing-list-title {
+  margin: 4px 0 10px;
+}
+
 .project-list {
   list-style: none;
   padding: 0;
@@ -405,6 +409,16 @@ body {
   background: rgba(229, 231, 235, 0.1);
 }
 
+.danger-btn {
+  border-color: rgba(229, 72, 77, 0.5);
+  color: #ffd4d5;
+}
+
+.danger-btn:hover {
+  border-color: rgba(229, 72, 77, 0.75);
+  background: rgba(229, 72, 77, 0.16);
+}
+
 .settings-form-card {
   margin-top: 16px;
   background: var(--panel);
@@ -490,6 +504,28 @@ body {
   color: #fff;
 }
 
+.settings-page-tabs {
+  margin-top: 0;
+}
+
+.settings-tabs-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sub.settings-empty {
+  margin: 20px auto 0;
+  text-align: center;
+  max-width: 620px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(24, 35, 47, 0.6);
+}
+
 .integration-card .sub {
   margin-bottom: 12px;
 }
@@ -543,7 +579,7 @@ body {
 }
 
 h1 { margin: 0px 0 8px; }
-.sub { margin: 4px 0 0; color: var(--muted); }
+.sub { margin: 8px 0 0; color: var(--muted); }
 
 .current-status-row {
   display: flex;
@@ -976,6 +1012,10 @@ h1 { margin: 0px 0 8px; }
   }
   .project-notification-controls {
     align-items: flex-start;
+  }
+  .settings-tabs-row {
+    flex-wrap: wrap;
+    align-items: stretch;
   }
   .landing-intro {
     padding: 12px 14px;

@@ -6,4 +6,5 @@ resources:
   - backend-svc.yaml
   - frontend.yaml
   - frontend-svc.yaml
+  - https-redirect-middleware.yaml
   - ingress.yaml

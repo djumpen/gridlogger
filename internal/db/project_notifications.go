@@ -56,6 +56,44 @@ func (r *ProjectNotificationRepository) SetProjectNotificationSubscription(ctx c
 	return current, nil
 }
 
+func (r *ProjectNotificationRepository) ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]service.Project, error) {
+	const q = `
+		SELECT p.id, p.name, p.slug, p.user_id, p.city, p.description, p.created_at
+		FROM project_notification_subscriptions s
+		INNER JOIN projects p ON p.id = s.project_id
+		WHERE s.user_id = $1
+		  AND s.is_active = TRUE
+		ORDER BY p.id ASC
+	`
+
+	rows, err := r.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]service.Project, 0)
+	for rows.Next() {
+		var p service.Project
+		if err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.Slug,
+			&p.UserID,
+			&p.City,
+			&p.Description,
+			&p.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (r *ProjectNotificationRepository) ListProjectIDsWithActiveSubscriptions(ctx context.Context) ([]int, error) {
 	const q = `
 		SELECT DISTINCT project_id

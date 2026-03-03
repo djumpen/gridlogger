@@ -57,6 +57,7 @@ type ProjectStore interface {
 	GetProjectByID(ctx context.Context, id int) (Project, bool, error)
 	CreateProject(ctx context.Context, in ProjectCreateInput) (Project, error)
 	UpdateProject(ctx context.Context, in ProjectUpdateInput) (Project, error)
+	DeleteProject(ctx context.Context, id int) error
 }
 
 type ProjectCatalogService struct {
@@ -194,6 +195,21 @@ func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64,
 	}
 	project.Secret = current.Secret
 	return project, nil
+}
+
+func (s *ProjectCatalogService) DeleteForUser(ctx context.Context, userID int64, projectID int) error {
+	if s == nil || s.store == nil {
+		return fmt.Errorf("project store is not configured")
+	}
+	if userID <= 0 || projectID <= 0 {
+		return ErrProjectInvalidData
+	}
+
+	current, err := s.GetByIDForUser(ctx, projectID, userID)
+	if err != nil {
+		return err
+	}
+	return s.store.DeleteProject(ctx, current.ID)
 }
 
 func normalizeSlug(raw string) (string, error) {

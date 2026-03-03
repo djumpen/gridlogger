@@ -5,6 +5,7 @@ metadata:
   namespace: gridlogger
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: gridlogger-redirect-https@kubernetescrd
     traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   ingressClassName: traefik

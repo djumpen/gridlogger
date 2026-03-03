@@ -43,6 +43,7 @@ type ProjectStatusStateUpsert struct {
 type ProjectNotificationStore interface {
 	GetProjectNotificationSubscription(ctx context.Context, userID int64, projectID int) (bool, error)
 	SetProjectNotificationSubscription(ctx context.Context, userID int64, projectID int, subscribed bool) (bool, error)
+	ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]Project, error)
 	ListProjectIDsWithActiveSubscriptions(ctx context.Context) ([]int, error)
 	ListActiveSubscribersByProjectID(ctx context.Context, projectID int) ([]ProjectNotificationSubscriber, error)
 	GetProjectStatusState(ctx context.Context, projectID int) (ProjectStatusState, bool, error)
@@ -115,6 +116,16 @@ func (s *ProjectNotificationService) SetSubscriptionForUser(ctx context.Context,
 		return false, ErrProjectNotFound
 	}
 	return s.store.SetProjectNotificationSubscription(ctx, userID, projectID, subscribed)
+}
+
+func (s *ProjectNotificationService) ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]Project, error) {
+	if userID <= 0 {
+		return nil, ErrProjectInvalidData
+	}
+	if s == nil || s.store == nil {
+		return []Project{}, nil
+	}
+	return s.store.ListActiveSubscribedProjectsByUserID(ctx, userID)
 }
 
 func (s *ProjectNotificationService) PollAndNotify(ctx context.Context) error {

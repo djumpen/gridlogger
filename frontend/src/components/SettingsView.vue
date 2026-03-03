@@ -2,13 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 
 const projects = ref([])
+const subscribedProjects = ref([])
 const loading = ref(false)
 const error = ref('')
 const showCreate = ref(false)
 const saving = ref(false)
 const saveError = ref('')
-const subscriptions = ref({})
-const subscriptionsLoading = ref({})
+const activeTab = ref('subscriptions')
 const subscriptionsSaving = ref({})
 const subscriptionsError = ref({})
 
@@ -55,7 +55,7 @@ async function loadSettings() {
 
     const data = await resp.json()
     projects.value = Array.isArray(data.projects) ? data.projects : []
-    await loadSubscriptions()
+    await loadSubscribedProjects()
   } catch (e) {
     error.value = e.message || 'Не вдалося завантажити ваші адреси.'
   } finally {
@@ -63,43 +63,28 @@ async function loadSettings() {
   }
 }
 
-async function loadSubscriptions() {
-  const items = Array.isArray(projects.value) ? projects.value : []
-  if (!items.length) return
-
-  await Promise.all(items.map(async (project) => {
-    const projectID = project?.id
-    if (!projectID) return
-
-    subscriptionsLoading.value = { ...subscriptionsLoading.value, [projectID]: true }
-    subscriptionsError.value = { ...subscriptionsError.value, [projectID]: '' }
-
-    try {
-      const resp = await fetch(`/api/projects/${projectID}/notifications/subscription`, {
-        credentials: 'include'
-      })
-      if (!resp.ok) {
-        throw new Error(await resp.text())
+async function loadSubscribedProjects() {
+  try {
+    const resp = await fetch('/api/settings/subscriptions', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
       }
-      const data = await resp.json()
-      subscriptions.value = { ...subscriptions.value, [projectID]: !!data.subscribed }
-    } catch (e) {
-      subscriptionsError.value = { ...subscriptionsError.value, [projectID]: e.message || 'Не вдалося завантажити підписку.' }
-      subscriptions.value = { ...subscriptions.value, [projectID]: false }
-    } finally {
-      subscriptionsLoading.value = { ...subscriptionsLoading.value, [projectID]: false }
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
     }
-  }))
+    const data = await resp.json()
+    subscribedProjects.value = Array.isArray(data.projects) ? data.projects : []
+  } catch (e) {
+    subscribedProjects.value = []
+    error.value = e.message || 'Не вдалося завантажити ваші підписки.'
+  }
 }
 
-function subscriptionLabel(projectID) {
-  return subscriptions.value[projectID] ? 'Відписатись' : 'Підписатись'
-}
-
-async function toggleProjectSubscription(projectID) {
-  if (!projectID || subscriptionsLoading.value[projectID] || subscriptionsSaving.value[projectID]) return
-
-  const nextValue = !subscriptions.value[projectID]
+async function unsubscribeFromProject(projectID) {
+  if (!projectID || subscriptionsSaving.value[projectID]) return
   subscriptionsSaving.value = { ...subscriptionsSaving.value, [projectID]: true }
   subscriptionsError.value = { ...subscriptionsError.value, [projectID]: '' }
 
@@ -111,16 +96,15 @@ async function toggleProjectSubscription(projectID) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        subscribed: nextValue
+        subscribed: false
       })
     })
     if (!resp.ok) {
       throw new Error(await resp.text())
     }
-    const data = await resp.json()
-    subscriptions.value = { ...subscriptions.value, [projectID]: !!data.subscribed }
+    subscribedProjects.value = subscribedProjects.value.filter((project) => project.id !== projectID)
   } catch (e) {
-    subscriptionsError.value = { ...subscriptionsError.value, [projectID]: e.message || 'Не вдалося оновити підписку.' }
+    subscriptionsError.value = { ...subscriptionsError.value, [projectID]: e.message || 'Не вдалося відписатись.' }
   } finally {
     subscriptionsSaving.value = { ...subscriptionsSaving.value, [projectID]: false }
   }
@@ -183,17 +167,39 @@ async function createProject() {
 
 <template>
   <section class="landing">
-    <header class="hero settings-hero">
-      <div>
-        <h1>Мої адреси</h1>
-        <p class="sub">Керуйте адресами, які належать вашому акаунту.</p>
+    <div class="settings-tabs-row">
+      <div class="settings-tabs settings-page-tabs" role="tablist" aria-label="Налаштування адрес">
+        <button
+          class="settings-tab-btn"
+          :class="{ active: activeTab === 'subscriptions' }"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'subscriptions'"
+          @click="activeTab = 'subscriptions'"
+        >
+          Мої підписки
+        </button>
+        <button
+          class="settings-tab-btn"
+          :class="{ active: activeTab === 'projects' }"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'projects'"
+          @click="activeTab = 'projects'"
+        >
+          Керування адресами
+        </button>
       </div>
-      <button class="primary-btn" type="button" @click="toggleCreateForm">
+      <button v-if="activeTab === 'projects'" class="primary-btn" type="button" @click="toggleCreateForm">
         Додати адресу
       </button>
-    </header>
+    </div>
 
-    <section v-if="showCreate" class="settings-form-card">
+    <p class="sub settings-tab-description">
+      {{ activeTab === 'subscriptions' ? 'Список адрес, на які ви підписані в Telegram.' : 'Адреси, які ви створили та можете налаштовувати.' }}
+    </p>
+
+    <section v-if="activeTab === 'projects' && showCreate" class="settings-form-card">
       <h2>Нова адреса</h2>
       <label class="field-label" for="project-name">Адреса</label>
       <input id="project-name" v-model="form.name" type="text" class="field-input" />
@@ -217,6 +223,30 @@ async function createProject() {
     <p v-if="loading">Завантаження…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
+    <ul v-else-if="activeTab === 'subscriptions' && subscribedProjects.length" class="project-list settings-project-list">
+      <li v-for="project in subscribedProjects" :key="project.id" class="settings-project-row">
+        <a :href="`/${project.slug}`" class="project-link settings-project-main">
+          <span class="project-name">{{ project.name }}</span>
+          <span class="project-city" v-if="project.city">м. {{ project.city }}</span>
+        </a>
+        <div class="settings-project-actions">
+          <button
+            class="secondary-btn settings-project-subscribe notify-unsubscribe"
+            type="button"
+            :disabled="subscriptionsSaving[project.id]"
+            title="Відписатись"
+            @click="unsubscribeFromProject(project.id)"
+          >
+            <span class="settings-btn-emoji" aria-hidden="true">{{ subscriptionsSaving[project.id] ? '⏳' : '🔕' }}</span>
+            <span class="settings-btn-text">{{ subscriptionsSaving[project.id] ? 'Оновлення…' : 'Відписатись' }}</span>
+          </button>
+        </div>
+        <p v-if="subscriptionsError[project.id]" class="error settings-project-error">{{ subscriptionsError[project.id] }}</p>
+      </li>
+    </ul>
+
+    <p v-else-if="activeTab === 'subscriptions'" class="sub settings-empty">У вас ще немає підписок.</p>
+
     <ul v-else-if="projects.length" class="project-list settings-project-list">
       <li v-for="project in projects" :key="project.id" class="settings-project-row">
         <a :href="`/${project.slug}`" class="project-link settings-project-main">
@@ -228,23 +258,9 @@ async function createProject() {
             <span class="settings-btn-emoji" aria-hidden="true">⚙️</span>
             <span class="settings-btn-text">Налаштування</span>
           </a>
-          <button
-            class="secondary-btn settings-project-subscribe"
-            :class="{ 'notify-unsubscribe': subscriptions[project.id], 'notify-subscribe': !subscriptions[project.id] }"
-            type="button"
-            :disabled="subscriptionsLoading[project.id] || subscriptionsSaving[project.id]"
-            :title="subscriptions[project.id] ? 'Відписатись' : 'Підписатись'"
-            @click="toggleProjectSubscription(project.id)"
-          >
-            <span class="settings-btn-emoji" aria-hidden="true">
-              {{ subscriptionsSaving[project.id] ? '⏳' : (subscriptions[project.id] ? '🔕' : '🔔') }}
-            </span>
-            <span class="settings-btn-text">{{ subscriptionsSaving[project.id] ? 'Оновлення…' : subscriptionLabel(project.id) }}</span>
-          </button>
         </div>
-        <p v-if="subscriptionsError[project.id]" class="error settings-project-error">{{ subscriptionsError[project.id] }}</p>
       </li>
     </ul>
-    <p v-else class="sub">У вас ще немає адрес. Додайте першу адресу.</p>
+    <p v-else class="sub settings-empty">У вас ще немає адрес. Додайте першу адресу.</p>
   </section>
 </template>

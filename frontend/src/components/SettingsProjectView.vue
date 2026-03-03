@@ -22,6 +22,8 @@ const form = ref({
 const saving = ref(false)
 const saveError = ref('')
 const saveSuccess = ref('')
+const deleting = ref(false)
+const deleteError = ref('')
 
 const revealSecret = ref(false)
 const copyingSecret = ref(false)
@@ -157,6 +159,31 @@ async function copySecret() {
     copyingSecret.value = false
   }
 }
+
+async function deleteProject() {
+  if (!project.value?.id || deleting.value) return
+
+  const confirmed = window.confirm('Ви впевнені, що хочете видалити цю адресу? Дію неможливо скасувати.')
+  if (!confirmed) return
+
+  try {
+    deleting.value = true
+    deleteError.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    window.location.href = '/a/settings'
+  } catch (e) {
+    deleteError.value = e.message || 'Не вдалося видалити адресу.'
+  } finally {
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -202,7 +229,11 @@ async function copySecret() {
           <button class="primary-btn" type="button" :disabled="saving" @click="saveProject">
             {{ saving ? 'Збереження…' : 'Зберегти' }}
           </button>
+          <button class="secondary-btn danger-btn" type="button" :disabled="saving || deleting" @click="deleteProject">
+            {{ deleting ? 'Видалення…' : 'Видалити адресу' }}
+          </button>
         </div>
+        <p v-if="deleteError" class="error form-error">{{ deleteError }}</p>
       </section>
 
       <section v-else class="settings-form-card integration-card">

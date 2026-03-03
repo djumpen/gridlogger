@@ -202,6 +202,18 @@ func (r *ProjectRepository) UpdateProject(ctx context.Context, in service.Projec
 	return service.Project{}, err
 }
 
+func (r *ProjectRepository) DeleteProject(ctx context.Context, id int) error {
+	const q = `DELETE FROM projects WHERE id = $1`
+	cmd, err := r.pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return service.ErrProjectNotFound
+	}
+	return nil
+}
+
 func isSlugUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
