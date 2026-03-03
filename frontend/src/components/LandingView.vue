@@ -18,12 +18,14 @@ defineProps({
 <template>
   <section class="landing">
     <header class="hero">
-      <div>
-        <p class="sub">Оберіть будинок зі списку, щоб переглянути стан електропостачання.</p>
+      <div class="landing-intro">
+        <ul class="landing-bullets">
+          <li>Оберіть адресу зі списку, щоб переглянути стан електропостачання</li>
+          <li>Увійдіть через Telegram, щоб додати свою адресу</li>
+          <li>Підпишіться на оновлення щоб отримувати повідомлення про зміну статусу в Telegram</li>
+        </ul>
       </div>
     </header>
-
-    <p class="landing-note">Увійдіть через Telegram, щоб додати власний проєкт.</p>
 
     <p v-if="projectsLoading">Завантаження…</p>
     <p v-else-if="projectsError" class="error">{{ projectsError }}</p>

@@ -249,10 +249,30 @@ body {
   margin-top: 8px;
 }
 
-.landing-note {
-  margin-top: 16px;
-  margin-bottom: 12px;
+.landing-intro {
+  margin-top: 4px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(24, 35, 47, 0.68);
+  max-width: 760px;
+}
+
+.landing-bullets {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
   color: var(--muted);
+}
+
+.landing-bullets li {
+  line-height: 1.45;
+}
+
+.landing-bullets li::marker {
+  color: var(--available);
 }
 
 .project-list {
@@ -956,6 +976,9 @@ h1 { margin: 0px 0 8px; }
   }
   .project-notification-controls {
     align-items: flex-start;
+  }
+  .landing-intro {
+    padding: 12px 14px;
   }
   .settings-project-main .project-name {
     display: block;
