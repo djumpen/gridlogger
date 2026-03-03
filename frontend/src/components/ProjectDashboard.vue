@@ -324,23 +324,20 @@ async function loadNotificationSubscription() {
   notificationsSubscribed.value = false
 
   try {
-    const meResp = await fetch('/api/me', {
-      credentials: 'include'
+    const subResp = await fetch(`/api/projects/${props.project.id}/notifications/subscription`, {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
     })
-    if (meResp.status === 401 || meResp.status === 403 || meResp.status === 503) {
+    if (subResp.status === 401 || subResp.status === 403 || subResp.status === 503) {
       return
     }
-    if (!meResp.ok) {
-      throw new Error(await meResp.text())
-    }
-
-    notificationsAvailable.value = true
-    const subResp = await fetch(`/api/projects/${props.project.id}/notifications/subscription`, {
-      credentials: 'include'
-    })
     if (!subResp.ok) {
       throw new Error(await subResp.text())
     }
+    notificationsAvailable.value = true
     const data = await subResp.json()
     notificationsSubscribed.value = !!data.subscribed
   } catch (e) {

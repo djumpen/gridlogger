@@ -32,6 +32,12 @@ export function useAuth() {
     }
   }
 
+  function sleep(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms)
+    })
+  }
+
   async function loadTelegramConfig() {
     try {
       const resp = await fetch('/api/auth/telegram/config', { credentials: 'include' })
@@ -53,17 +59,36 @@ export function useAuth() {
 
   async function loadMe() {
     try {
-      const resp = await fetch('/api/me', { credentials: 'include' })
+      const resp = await fetch('/api/me', {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
       if (!resp.ok) {
         currentUser.value = null
-        return
+        return null
       }
 
       const data = await resp.json()
       currentUser.value = data.user || null
+      return currentUser.value
     } catch {
       currentUser.value = null
+      return null
     }
+  }
+
+  async function confirmSession(retries = 3) {
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      const user = await loadMe()
+      if (user) return user
+      if (attempt < retries - 1) {
+        await sleep(180)
+      }
+    }
+    return null
   }
 
   function renderTelegramWidget(rootEl) {
@@ -93,8 +118,11 @@ export function useAuth() {
           throw new Error(await resp.text())
         }
 
-        const data = await resp.json()
-        currentUser.value = data.user || null
+        await resp.json()
+        const confirmedUser = await confirmSession()
+        if (!confirmedUser) {
+          throw new Error('Не вдалося підтвердити вхід. Спробуйте ще раз.')
+        }
         emitAuthChanged()
         clearWidget(rootEl)
       } catch (e) {

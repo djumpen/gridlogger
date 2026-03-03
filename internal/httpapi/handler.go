@@ -336,6 +336,7 @@ func (h *Handler) handleTelegramConfig(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) handleTelegramCallback(w http.ResponseWriter, r *http.Request) {
+	setNoStoreHeaders(w)
 	if !h.authEnabled() {
 		http.Error(w, "telegram auth is disabled", http.StatusServiceUnavailable)
 		return
@@ -382,6 +383,7 @@ func (h *Handler) handleTelegramCallback(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
+	setNoStoreHeaders(w)
 	if !h.authEnabled() {
 		http.Error(w, "telegram auth is disabled", http.StatusServiceUnavailable)
 		return
@@ -417,6 +419,7 @@ func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleLogout(w http.ResponseWriter, _ *http.Request) {
+	setNoStoreHeaders(w)
 	if !h.authEnabled() {
 		http.Error(w, "telegram auth is disabled", http.StatusServiceUnavailable)
 		return
@@ -569,6 +572,7 @@ func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
 }
 
 func (h *Handler) requireUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	setNoStoreHeaders(w)
 	if !h.authEnabled() {
 		http.Error(w, "telegram auth is disabled", http.StatusServiceUnavailable)
 		return 0, false
@@ -711,4 +715,11 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func setNoStoreHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Vary", "Cookie, Authorization")
 }
