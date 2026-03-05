@@ -143,6 +143,25 @@ const windowLabel = computed(() => {
   return `${windowFrom.value.slice(0, 10)} → ${windowTo.value.slice(0, 10)}`
 })
 
+function formatHoursToUA(value) {
+  const hoursFloat = Number(value)
+  if (!Number.isFinite(hoursFloat) || hoursFloat <= 0) {
+    return '0хв'
+  }
+
+  const totalMinutes = Math.round(hoursFloat * 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) {
+    return `${minutes}хв`
+  }
+  if (minutes === 0) {
+    return `${hours} год`
+  }
+  return `${hours} год ${minutes}хв`
+}
+
 const isCurrentIntervalSelected = computed(() => {
   const selected = computeWindowForDate(new Date(`${selectedDate.value}T00:00:00`), view.value)
   const now = computeWindowForDate(new Date(), view.value)
@@ -446,11 +465,11 @@ onBeforeUnmount(() => {
       <p>Наявність у цьому інтервалі</p>
     </article>
     <article>
-      <h2>{{ stats.totalAvailableHours.toFixed(1) }} год</h2>
+      <h2>{{ formatHoursToUA(stats.totalAvailableHours) }}</h2>
       <p>Загалом зі світлом</p>
     </article>
     <article>
-      <h2>{{ stats.totalOutageHours.toFixed(1) }} год</h2>
+      <h2>{{ formatHoursToUA(stats.totalOutageHours) }}</h2>
       <p>Загалом без світла</p>
     </article>
   </section>
