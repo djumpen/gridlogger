@@ -2,6 +2,14 @@
 
 This setup keeps local development manual and uses Infisical as the production source of truth for secrets.
 
+Infisical resources are split:
+
+- Project-specific `InfisicalSecret` stays in this repo:
+  - `k8s/infisical/infisicalsecret-gridlogger-prod.yaml`
+  - `k8s/infisical/kustomization.yaml`
+- Shared/service-account bootstrap can be managed centrally in:
+  - `/Users/dmytro.semenchuk/projects/mylab/k8s/infisical/gridlogger`
+
 ## Desired flow
 
 1. Update/add secrets in Infisical UI.
@@ -10,11 +18,13 @@ This setup keeps local development manual and uses Infisical as the production s
 
 `backend` and `timescaledb` already consume Kubernetes secrets via `secretKeyRef`.
 
-## What was added
+## Current manifest location
 
-- `k8s/infisical/serviceaccount.yaml`
 - `k8s/infisical/infisicalsecret-gridlogger-prod.yaml`
 - `k8s/infisical/kustomization.yaml`
+- Optional centralized companions:
+  - `/Users/dmytro.semenchuk/projects/mylab/k8s/infisical/gridlogger/serviceaccount.yaml`
+  - `/Users/dmytro.semenchuk/projects/mylab/k8s/infisical/gridlogger/serviceaccount-token.yaml`
 - `secrets.infisical.com/auto-reload: "true"` annotation on backend deployment
 
 ## One-time cluster setup
@@ -22,7 +32,11 @@ This setup keeps local development manual and uses Infisical as the production s
 1. Install Infisical operator:
 
 ```bash
-make infisical-install
+helm repo add infisical-helm-charts https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/
+helm repo update
+helm upgrade --install infisical-secrets-operator infisical-helm-charts/secrets-operator \
+  --namespace infisical-secrets \
+  --create-namespace
 ```
 
 2. Edit `k8s/infisical/infisicalsecret-gridlogger-prod.yaml` and replace:
@@ -35,16 +49,23 @@ make infisical-install
 3. Apply Infisical resources:
 
 ```bash
-make infisical-apply
+kubectl apply -k k8s/infisical
 ```
 
 4. Verify sync:
 
 ```bash
-make infisical-status
 kubectl describe infisicalsecret -n gridlogger gridlogger-prod-secrets
 kubectl get secret -n gridlogger gridlogger-secrets -o yaml
 ```
+
+## Troubleshooting: "service account token has expired"
+
+If Infisical logs show `invalid bearer token, service account token has expired`, make sure:
+
+- `k8s/infisical/infisicalsecret-gridlogger-prod.yaml` has `autoCreateServiceAccountToken: false`
+- serviceaccount token secret is applied (from local or centralized manifests)
+- Re-apply `k8s/infisical` and wait for `InfisicalSecret` status to become ready
 
 ## Required Infisical keys
 
@@ -57,12 +78,11 @@ Store these in your Infisical project/environment/path:
 
 ## Deploy flow
 
-`make deploy` now:
+Deploy flow:
 
-1. Applies Traefik config
-2. Ensures namespace exists
-3. Applies Infisical CRD resources (`k8s/infisical`)
-4. Applies app manifests (`k8s/overlays/prod`)
+1. Apply optional centralized serviceaccount/token manifests (if you manage them in `mylab`).
+2. Apply project `InfisicalSecret` (`k8s/infisical`).
+3. Apply app manifests (`k8s/overlays/prod`) from this repo.
 
 ## Local development
 

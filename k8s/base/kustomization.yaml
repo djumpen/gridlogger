@@ -1,6 +1,5 @@
 resources:
   - namespace.yaml
-  - timescaledb.yaml
   - timescaledb-svc.yaml
   - backend.yaml
   - backend-svc.yaml
