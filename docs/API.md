@@ -13,12 +13,13 @@ Success `200` example:
   "projects": [
     {
       "id": 1,
-      "name": "Коновальця 36Б",
-      "slug": "36b",
+      "name": "Саксаганського 12А",
+      "slug": "saksa-12a",
       "userId": 42,
       "city": "Київ",
       "description": "Ввод #1",
       "isPublic": true,
+      "hasOutageSchedule": true,
       "createdAt": "2026-03-02T10:00:00Z"
     }
   ]
@@ -35,12 +36,13 @@ Success `200` example:
 {
   "project": {
     "id": 1,
-    "name": "Коновальця 36Б",
-    "slug": "36b",
+    "name": "Саксаганського 12А",
+    "slug": "saksa-12a",
     "userId": 42,
     "city": "Київ",
     "description": "Ввод #1",
     "isPublic": true,
+    "hasOutageSchedule": true,
     "createdAt": "2026-03-02T10:00:00Z"
   }
 }
@@ -113,6 +115,173 @@ Errors:
 - `403` forbidden (not owner)
 - `404` not found
 - `409` slug already exists
+
+## GET `/api/settings/projects/{projectId}/yasno`
+
+Returns saved Yasno group configuration for this project and the latest schedule preview if the upstream fetch succeeds.
+
+Success `200` example:
+
+```json
+{
+  "config": {
+    "projectId": 1,
+    "regionId": 1,
+    "regionName": "Київ",
+    "dsoId": 11,
+    "dsoName": "ДТЕК Київські електромережі",
+    "streetId": 12345,
+    "streetName": "вул. Саксаганського",
+    "houseId": 67890,
+    "houseName": "12/А",
+    "group": "3.1",
+    "createdAt": "2026-03-07T10:00:00Z",
+    "updatedAt": "2026-03-07T10:05:00Z"
+  },
+  "schedule": {
+    "group": "3.1",
+    "address": "вул. Саксаганського, 12/А",
+    "updatedAt": "2026-03-07T08:15:00+02:00",
+    "days": [
+      {
+        "key": "today",
+        "label": "Сьогодні",
+        "weekdayShort": "Сб",
+        "date": "2026-03-07",
+        "status": "ScheduleApplies",
+        "slots": [
+          { "startMinute": 480, "endMinute": 600, "type": "Definite" }
+        ]
+      }
+    ]
+  },
+  "scheduleError": ""
+}
+```
+
+Errors:
+- `400` invalid project id
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found
+- `502` Yasno upstream error
+
+## GET `/api/settings/projects/{projectId}/yasno/regions`
+
+Returns Yasno regions with DSOs/providers for the address selection flow.
+
+Errors:
+- `400` invalid project id
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found
+- `502` Yasno upstream error
+
+## GET `/api/settings/projects/{projectId}/yasno/streets?regionId=<id>&dsoId=<id>&query=<text>`
+
+Searches Yasno streets for the selected region and DSO.
+
+Errors:
+- `400` invalid params
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found / Yasno lookup not found
+- `502` Yasno upstream error
+
+## GET `/api/settings/projects/{projectId}/yasno/houses?regionId=<id>&streetId=<id>&dsoId=<id>&query=<text>`
+
+Searches Yasno houses for the selected street.
+
+Errors:
+- `400` invalid params
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found / Yasno lookup not found
+- `502` Yasno upstream error
+
+## POST `/api/settings/projects/{projectId}/yasno/preview`
+
+Resolves the Yasno group for the selected address and returns the current schedule preview without saving it.
+
+Request JSON:
+
+```json
+{
+  "regionId": 1,
+  "regionName": "Київ",
+  "dsoId": 11,
+  "dsoName": "ДТЕК Київські електромережі",
+  "streetId": 12345,
+  "streetName": "вул. Саксаганського",
+  "houseId": 67890,
+  "houseName": "12/А"
+}
+```
+
+Errors:
+- `400` invalid payload
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found / Yasno lookup not found / schedule not found for this group
+- `502` Yasno upstream error
+
+## POST `/api/settings/projects/{projectId}/yasno`
+
+Resolves and saves Yasno identifiers for this project in `dtek_groups`.
+
+Request JSON: same as preview endpoint.
+
+Success `200` body: same shape as the preview endpoint, but `config` includes persisted timestamps.
+
+Errors:
+- `400` invalid payload
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found / Yasno lookup not found / schedule not found for this group
+- `502` Yasno upstream error
+
+## DELETE `/api/settings/projects/{projectId}/yasno`
+
+Removes the saved Yasno group binding from the current project.
+
+Errors:
+- `400` invalid project id
+- `401` unauthorized
+- `403` forbidden
+- `404` project not found
+
+## GET `/api/projects/{projectId}/yasno`
+
+Returns the public Yasno planned schedule for a configured project.
+
+Success `200` example:
+
+```json
+{
+  "schedule": {
+    "group": "3.1",
+    "address": "вул. Саксаганського, 12/А",
+    "updatedAt": "2026-03-07T08:15:00+02:00",
+    "days": [
+      {
+        "key": "today",
+        "label": "Сьогодні",
+        "weekdayShort": "Сб",
+        "date": "2026-03-07",
+        "status": "ScheduleApplies",
+        "slots": [
+          { "startMinute": 480, "endMinute": 600, "type": "Definite" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Errors:
+- `400` invalid project id
+- `404` project not found / Yasno is not configured / schedule not found for this group
+- `502` Yasno upstream error
 
 ## GET `/api/settings/projects/{projectId}/telegram-bot/groups`
 

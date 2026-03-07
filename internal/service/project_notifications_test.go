@@ -39,9 +39,9 @@ func TestBuildProjectStatusNotificationMessage(t *testing.T) {
 
 	project := Project{
 		ID:   7,
-		Name: "Коновальця 36Б",
+		Name: "Саксаганського 12А",
 		City: "Київ",
-		Slug: "36b",
+		Slug: "saksa-12a",
 	}
 
 	outage := buildProjectStatusNotificationMessage(project, projectStatusOutage, 2*time.Hour+30*time.Minute)
@@ -57,7 +57,7 @@ func TestBuildProjectStatusNotificationMessage(t *testing.T) {
 	if strings.Contains(outage, "м. Київ") {
 		t.Fatalf("outage message must not include city: %q", outage)
 	}
-	if !strings.Contains(outage, "https://svitlo.homes/36b") {
+	if !strings.Contains(outage, "https://svitlo.homes/saksa-12a") {
 		t.Fatalf("outage message must include public link: %q", outage)
 	}
 

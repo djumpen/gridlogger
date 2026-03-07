@@ -24,15 +24,16 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 const reservedProjectSlugAPI = "api"
 
 type Project struct {
-	ID          int       `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	UserID      int64     `json:"userId"`
-	City        string    `json:"city"`
-	Description string    `json:"description"`
-	Secret      string    `json:"secret,omitempty"`
-	IsPublic    bool      `json:"isPublic"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID                int       `json:"id"`
+	Name              string    `json:"name"`
+	Slug              string    `json:"slug"`
+	UserID            int64     `json:"userId"`
+	City              string    `json:"city"`
+	Description       string    `json:"description"`
+	Secret            string    `json:"secret,omitempty"`
+	IsPublic          bool      `json:"isPublic"`
+	HasOutageSchedule bool      `json:"hasOutageSchedule"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 type ProjectCreateInput struct {

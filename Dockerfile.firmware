@@ -7,11 +7,19 @@ COPY . .
 RUN go build -o /out/firmware ./cmd/firmware
 
 FROM debian:bookworm-slim
+ARG APP_VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+ARG OCI_SOURCE=https://github.com/djumpen/gridlogger
 ARG ARDUINO_CLI_VERSION=1.1.1
 ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data
 ENV ARDUINO_DIRECTORIES_DOWNLOADS=/opt/arduino/staging
 ENV ARDUINO_DIRECTORIES_USER=/opt/arduino/user
 ENV FIRMWARE_TEMPLATE_DIR=/home/app/firmware/esp32-c3
+LABEL org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.source=$OCI_SOURCE
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl tar bash python3 && \

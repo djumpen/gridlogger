@@ -7,6 +7,14 @@ COPY . .
 RUN go build -o /out/server ./cmd/server
 
 FROM debian:bookworm-slim
+ARG APP_VERSION=dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+ARG OCI_SOURCE=https://github.com/djumpen/gridlogger
+LABEL org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.source=$OCI_SOURCE
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*

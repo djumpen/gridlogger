@@ -160,6 +160,26 @@ Frontend assumptions:
 - `/a/settings` renders owner settings list + create flow.
 - `/a/settings/project/{id}` renders project settings/integration tabs.
 
+## Releases and rollback
+
+- Release version is derived from Conventional Commit messages since the latest `vX.Y.Z` git tag.
+- `feat:` bumps minor, `type(scope)!:` or `BREAKING CHANGE:` bumps major, everything else bumps patch.
+- CI publishes Docker images with three tags: semantic version (`1.4.2`), commit SHA, and `latest`.
+- OCI image labels include version, revision, and build date.
+
+Useful commands:
+
+```bash
+make next-version
+make rollout-version VERSION=1.4.2
+make rollout-version VERSION=1.4.2 WITH_FIRMWARE=true
+```
+
+Migration policy:
+- App rollback is supported by redeploying an older image tag.
+- Database migrations are intentionally forward-only and are not rolled back automatically.
+- Keep schema changes additive/backward-compatible and use expand-contract migrations when removing or renaming data structures.
+
 ## CI/CD
 
 GitHub Actions:

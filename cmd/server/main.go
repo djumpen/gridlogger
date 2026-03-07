@@ -52,6 +52,7 @@ func main() {
 	svc := service.NewAvailabilityService(repo, cfg.OutageThreshold)
 	projectRepo := db.NewProjectRepository(pool)
 	projectCatalog := service.NewProjectCatalogService(projectRepo)
+	dtekGroupRepo := db.NewDTEKGroupRepository(pool)
 	projectNotificationRepo := db.NewProjectNotificationRepository(pool)
 	telegramBot := service.NewTelegramBotService(cfg.TelegramBotToken)
 	projectNotifications := service.NewProjectNotificationService(
@@ -72,6 +73,8 @@ func main() {
 		firmwareClient,
 		cfg.FirmwarePingBaseURL,
 	)
+	yasnoClient := service.NewYasnoClient(cfg.YasnoBaseURL, cfg.YasnoTimeout)
+	yasnoSchedules := service.NewYasnoScheduleService(projectCatalog, dtekGroupRepo, yasnoClient)
 	telegramRepo := db.NewTelegramAccountRepository(pool)
 	telegramAuth := service.NewTelegramAuthService(telegramRepo, cfg.TelegramBotToken, cfg.TelegramAuthTTL)
 	sessionAuth := service.NewSessionService(cfg.JWTSecret, cfg.JWTIssuer, cfg.SessionTTL)
@@ -80,6 +83,7 @@ func main() {
 		projectCatalog,
 		projectNotifications,
 		firmwareBuilds,
+		yasnoSchedules,
 		telegramAuth,
 		sessionAuth,
 		cfg.DefaultProjectID,

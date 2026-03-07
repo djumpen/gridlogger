@@ -20,7 +20,9 @@ func NewProjectRepository(pool *pgxpool.Pool) *ProjectRepository {
 
 func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, is_public, created_at
+		SELECT id, name, slug, user_id, city, description, is_public,
+			EXISTS (SELECT 1 FROM dtek_groups WHERE dtek_groups.project_id = projects.id) AS has_outage_schedule,
+			created_at
 		FROM projects
 		WHERE is_public = TRUE
 		ORDER BY name ASC, id ASC
@@ -43,6 +45,7 @@ func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project
 			&p.City,
 			&p.Description,
 			&p.IsPublic,
+			&p.HasOutageSchedule,
 			&p.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -57,7 +60,9 @@ func (r *ProjectRepository) ListProjects(ctx context.Context) ([]service.Project
 
 func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int64) ([]service.Project, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, is_public, created_at
+		SELECT id, name, slug, user_id, city, description, is_public,
+			EXISTS (SELECT 1 FROM dtek_groups WHERE dtek_groups.project_id = projects.id) AS has_outage_schedule,
+			created_at
 		FROM projects
 		WHERE user_id = $1
 		ORDER BY id ASC
@@ -80,6 +85,7 @@ func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int
 			&p.City,
 			&p.Description,
 			&p.IsPublic,
+			&p.HasOutageSchedule,
 			&p.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -94,7 +100,9 @@ func (r *ProjectRepository) ListProjectsByUserID(ctx context.Context, userID int
 
 func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (service.Project, bool, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, is_public, created_at
+		SELECT id, name, slug, user_id, city, description, is_public,
+			EXISTS (SELECT 1 FROM dtek_groups WHERE dtek_groups.project_id = projects.id) AS has_outage_schedule,
+			created_at
 		FROM projects
 		WHERE slug = $1
 	`
@@ -108,6 +116,7 @@ func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (
 		&p.City,
 		&p.Description,
 		&p.IsPublic,
+		&p.HasOutageSchedule,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -121,7 +130,9 @@ func (r *ProjectRepository) GetProjectBySlug(ctx context.Context, slug string) (
 
 func (r *ProjectRepository) GetProjectByID(ctx context.Context, id int) (service.Project, bool, error) {
 	const q = `
-		SELECT id, name, slug, user_id, city, description, secret, is_public, created_at
+		SELECT id, name, slug, user_id, city, description, secret, is_public,
+			EXISTS (SELECT 1 FROM dtek_groups WHERE dtek_groups.project_id = projects.id) AS has_outage_schedule,
+			created_at
 		FROM projects
 		WHERE id = $1
 	`
@@ -136,6 +147,7 @@ func (r *ProjectRepository) GetProjectByID(ctx context.Context, id int) (service
 		&p.Description,
 		&p.Secret,
 		&p.IsPublic,
+		&p.HasOutageSchedule,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -151,7 +163,7 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, in service.Projec
 	const q = `
 		INSERT INTO projects (name, slug, user_id, city, secret, is_public)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, name, slug, user_id, city, description, secret, is_public, created_at
+		RETURNING id, name, slug, user_id, city, description, secret, is_public, FALSE, created_at
 	`
 
 	var p service.Project
@@ -164,6 +176,7 @@ func (r *ProjectRepository) CreateProject(ctx context.Context, in service.Projec
 		&p.Description,
 		&p.Secret,
 		&p.IsPublic,
+		&p.HasOutageSchedule,
 		&p.CreatedAt,
 	)
 	if err == nil {
@@ -183,7 +196,9 @@ func (r *ProjectRepository) UpdateProject(ctx context.Context, in service.Projec
 			city = $3,
 			is_public = $4
 		WHERE id = $5
-		RETURNING id, name, slug, user_id, city, description, secret, is_public, created_at
+		RETURNING id, name, slug, user_id, city, description, secret, is_public,
+			EXISTS (SELECT 1 FROM dtek_groups WHERE dtek_groups.project_id = projects.id),
+			created_at
 	`
 
 	var p service.Project
@@ -196,6 +211,7 @@ func (r *ProjectRepository) UpdateProject(ctx context.Context, in service.Projec
 		&p.Description,
 		&p.Secret,
 		&p.IsPublic,
+		&p.HasOutageSchedule,
 		&p.CreatedAt,
 	)
 	if err == nil {

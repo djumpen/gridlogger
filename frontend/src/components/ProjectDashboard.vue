@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IntervalBar from './IntervalBar.vue'
+import OutageScheduleCard from './OutageScheduleCard.vue'
 
 const props = defineProps({
   project: {
@@ -29,6 +30,11 @@ const notificationsLoading = ref(false)
 const notificationsSaving = ref(false)
 const notificationsError = ref('')
 const notificationsSubscribed = ref(false)
+const projectTab = ref('outages')
+const outageScheduleLoading = ref(false)
+const outageScheduleLoaded = ref(false)
+const outageScheduleError = ref('')
+const outageSchedule = ref(null)
 
 const selectedDate = ref(formatForInput(new Date()))
 const viewOptions = [
@@ -142,6 +148,9 @@ const windowLabel = computed(() => {
   if (!windowFrom.value || !windowTo.value) return ''
   return `${windowFrom.value.slice(0, 10)} → ${windowTo.value.slice(0, 10)}`
 })
+const hasOutageSchedule = computed(() => !!props.project?.hasOutageSchedule)
+const showOutagesTab = computed(() => projectTab.value === 'outages' || !hasOutageSchedule.value)
+const showYasnoTab = computed(() => hasOutageSchedule.value && projectTab.value === 'yasno')
 
 function formatHoursToUA(value) {
   const hoursFloat = Number(value)
@@ -366,6 +375,39 @@ async function loadNotificationSubscription() {
   }
 }
 
+async function loadOutageSchedule() {
+  if (!props.project?.id || outageScheduleLoading.value) return
+
+  try {
+    outageScheduleLoading.value = true
+    outageScheduleError.value = ''
+
+    const resp = await fetch(`/api/projects/${props.project.id}/yasno`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    outageSchedule.value = data.schedule || null
+    outageScheduleLoaded.value = true
+  } catch (e) {
+    outageScheduleError.value = e.message || 'Не вдалося завантажити графік відключень.'
+  } finally {
+    outageScheduleLoading.value = false
+  }
+}
+
+function selectProjectTab(nextTab) {
+  projectTab.value = nextTab
+  if (nextTab === 'yasno' && !outageScheduleLoaded.value) {
+    loadOutageSchedule()
+  }
+}
+
 async function toggleNotificationSubscription() {
   if (!props.project?.id || !notificationsAvailable.value) return
 
@@ -400,6 +442,16 @@ watch(() => props.project?.id, (nextId, prevId) => {
   if (nextId && nextId !== prevId) {
     loadAvailability()
     loadNotificationSubscription()
+    projectTab.value = 'outages'
+    outageScheduleLoaded.value = false
+    outageScheduleError.value = ''
+    outageSchedule.value = null
+  }
+})
+
+watch(hasOutageSchedule, (enabled) => {
+  if (!enabled) {
+    projectTab.value = 'outages'
   }
 })
 
@@ -452,29 +504,66 @@ onBeforeUnmount(() => {
     </div>
   </header>
 
-  <section class="stats">
-    <article>
-      <h2 class="current-status-row" :class="`status-${currentStatus.replace(' ', '-')}`">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span>{{ currentStatusLabel }}</span>
-      </h2>
-      <p>Поточний стан</p>
-    </article>
-    <article>
-      <h2>{{ stats.availabilityPercent.toFixed(1) }}%</h2>
-      <p>Наявність у цьому інтервалі</p>
-    </article>
-    <article>
-      <h2>{{ formatHoursToUA(stats.totalAvailableHours) }}</h2>
-      <p>Загалом зі світлом</p>
-    </article>
-    <article>
-      <h2>{{ formatHoursToUA(stats.totalOutageHours) }}</h2>
-      <p>Загалом без світла</p>
-    </article>
+  <section v-if="hasOutageSchedule" class="project-view-tabs-wrap">
+    <div class="settings-tabs project-view-tabs" role="tablist" aria-label="Види даних про проєкт">
+      <button
+        class="settings-tab-btn"
+        :class="{ active: projectTab === 'outages' }"
+        type="button"
+        role="tab"
+        :aria-selected="projectTab === 'outages'"
+        @click="selectProjectTab('outages')"
+      >
+        Відключення
+      </button>
+      <button
+        class="settings-tab-btn"
+        :class="{ active: projectTab === 'yasno' }"
+        type="button"
+        role="tab"
+        :aria-selected="projectTab === 'yasno'"
+        @click="selectProjectTab('yasno')"
+      >
+        Графік Yasno
+      </button>
+    </div>
   </section>
 
-  <section class="calendar" v-if="!loading && !error">
+  <section v-if="showYasnoTab" class="outage-project-panel">
+    <p v-if="outageScheduleLoading" class="sub">Завантаження графіка Yasno…</p>
+    <p v-else-if="outageScheduleError" class="error">{{ outageScheduleError }}</p>
+    <OutageScheduleCard
+      v-else-if="outageSchedule"
+      :schedule="outageSchedule"
+      title="Планові відключення"
+      subtitle="Yasno"
+    />
+  </section>
+
+  <template v-if="showOutagesTab">
+    <section class="stats">
+      <article>
+        <h2 class="current-status-row" :class="`status-${currentStatus.replace(' ', '-')}`">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>{{ currentStatusLabel }}</span>
+        </h2>
+        <p>Поточний стан</p>
+      </article>
+      <article>
+        <h2>{{ stats.availabilityPercent.toFixed(1) }}%</h2>
+        <p>Наявність у цьому інтервалі</p>
+      </article>
+      <article>
+        <h2>{{ formatHoursToUA(stats.totalAvailableHours) }}</h2>
+        <p>Загалом зі світлом</p>
+      </article>
+      <article>
+        <h2>{{ formatHoursToUA(stats.totalOutageHours) }}</h2>
+        <p>Загалом без світла</p>
+      </article>
+    </section>
+
+    <section class="calendar" v-if="!loading && !error">
     <header>
       <div class="calendar-title-row">
         <h3>Інтервали</h3>
@@ -552,8 +641,9 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-else>Інтервалів ще немає. Надішліть ping, щоб почати відстеження.</p>
-  </section>
+    </section>
 
-  <p v-if="loading">Завантаження…</p>
-  <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="loading">Завантаження…</p>
+    <p v-if="error" class="error">{{ error }}</p>
+  </template>
 </template>

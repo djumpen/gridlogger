@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import OutageScheduleCard from './OutageScheduleCard.vue'
 
 const props = defineProps({
   projectId: {
@@ -50,6 +51,40 @@ const telegramBotSaveError = ref('')
 const telegramBotSuccess = ref('')
 const telegramBotDeleting = ref({})
 const telegramBotUsername = ref('svitlohomes_bot')
+const yasnoLoading = ref(false)
+const yasnoLoaded = ref(false)
+const yasnoError = ref('')
+const yasnoScheduleError = ref('')
+const yasnoRegions = ref([])
+const yasnoRegionsLoading = ref(false)
+const yasnoStreetOptions = ref([])
+const yasnoStreetLoading = ref(false)
+const yasnoStreetSearchDone = ref(false)
+const yasnoHouseOptions = ref([])
+const yasnoHouseLoading = ref(false)
+const yasnoHouseSearchDone = ref(false)
+const yasnoPreviewLoading = ref(false)
+const yasnoPreviewError = ref('')
+const yasnoSaveLoading = ref(false)
+const yasnoSaveError = ref('')
+const yasnoSaveSuccess = ref('')
+const yasnoDeleteLoading = ref(false)
+const yasnoConfig = ref(null)
+const yasnoSchedule = ref(null)
+const yasnoSelection = ref({
+  regionId: '',
+  dsoId: '',
+  streetQuery: '',
+  houseQuery: ''
+})
+const yasnoSelectedStreet = ref(null)
+const yasnoSelectedHouse = ref(null)
+let streetDebounceTimer = null
+let houseDebounceTimer = null
+let streetAbortController = null
+let houseAbortController = null
+let streetRequestID = 0
+let houseRequestID = 0
 
 const slugError = computed(() => {
   const slug = String(form.value.slug || '').trim().toLowerCase()
@@ -76,18 +111,121 @@ const telegramBotStartGroupLink = computed(() => {
   const username = String(telegramBotUsername.value || '').trim().replace(/^@+/, '')
   return username ? `https://t.me/${username}?startgroup=gridlogger` : ''
 })
+const yasnoSelectedRegion = computed(() => {
+  const regionId = Number(yasnoSelection.value.regionId)
+  return yasnoRegions.value.find((item) => item.id === regionId) || null
+})
+const yasnoDSOOptions = computed(() => Array.isArray(yasnoSelectedRegion.value?.dsos) ? yasnoSelectedRegion.value.dsos : [])
+const yasnoSelectedDSO = computed(() => {
+  const dsoId = Number(yasnoSelection.value.dsoId)
+  return yasnoDSOOptions.value.find((item) => item.id === dsoId) || null
+})
+const yasnoCanSearchStreets = computed(() => {
+  return !!yasnoSelectedRegion.value && !!yasnoSelectedDSO.value && String(yasnoSelection.value.streetQuery || '').trim().length >= 2
+})
+const yasnoCanSearchHouses = computed(() => {
+  return !!yasnoSelectedStreet.value && String(yasnoSelection.value.houseQuery || '').trim().length >= 1
+})
+const yasnoCanPreview = computed(() => {
+  return !!yasnoSelectedRegion.value && !!yasnoSelectedDSO.value && !!yasnoSelectedStreet.value && !!yasnoSelectedHouse.value
+})
+const yasnoStreetAutocompleteOpen = computed(() => {
+  const query = String(yasnoSelection.value.streetQuery || '').trim()
+  const selectedName = String(yasnoSelectedStreet.value?.name || '').trim()
+  return !!yasnoSelectedRegion.value && !!yasnoSelectedDSO.value && query.length >= 2 && query !== selectedName
+})
+const yasnoHouseAutocompleteOpen = computed(() => {
+  const query = String(yasnoSelection.value.houseQuery || '').trim()
+  const selectedName = String(yasnoSelectedHouse.value?.name || '').trim()
+  return !!yasnoSelectedStreet.value && query.length >= 1 && query !== selectedName
+})
 
 onMounted(() => {
   loadProject()
 })
 
+onBeforeUnmount(() => {
+  cancelStreetAutocomplete()
+  cancelHouseAutocomplete()
+})
+
 watch(activeTab, (tab) => {
+  if (tab === 'yasno') {
+    void loadYasnoState()
+    void loadYasnoRegions()
+  }
   if (tab === 'telegram-bot') {
     void loadTelegramBotGroups()
   }
   if (tab === 'firmware') {
     void ensureEspWebInstallButton()
   }
+})
+
+watch(() => yasnoSelection.value.regionId, () => {
+  yasnoSelection.value.dsoId = ''
+  resetYasnoStreetSelection()
+  resetYasnoHouseSelection()
+  clearYasnoPreviewMessages()
+})
+
+watch(() => yasnoSelection.value.dsoId, () => {
+  resetYasnoStreetSelection()
+  resetYasnoHouseSelection()
+  clearYasnoPreviewMessages()
+})
+
+watch(() => yasnoSelection.value.streetQuery, (nextValue) => {
+  const query = String(nextValue || '').trim()
+  const selectedName = String(yasnoSelectedStreet.value?.name || '').trim()
+
+  if (query !== selectedName) {
+    yasnoSelectedStreet.value = null
+    resetYasnoHouseSelection()
+  }
+  clearYasnoPreviewMessages()
+  cancelStreetAutocomplete()
+
+  if (!yasnoStreetAutocompleteOpen.value) {
+    yasnoStreetLoading.value = false
+    yasnoStreetSearchDone.value = false
+    if (!query) {
+      yasnoStreetOptions.value = []
+    }
+    return
+  }
+
+  yasnoStreetLoading.value = true
+  yasnoStreetSearchDone.value = false
+  streetDebounceTimer = window.setTimeout(() => {
+    void searchYasnoStreets(query)
+  }, 350)
+})
+
+watch(() => yasnoSelection.value.houseQuery, (nextValue) => {
+  const query = String(nextValue || '').trim()
+  const selectedName = String(yasnoSelectedHouse.value?.name || '').trim()
+
+  if (query !== selectedName) {
+    yasnoSelectedHouse.value = null
+  }
+  clearYasnoPreviewMessages()
+  cancelHouseAutocomplete()
+
+  if (!yasnoHouseAutocompleteOpen.value) {
+    yasnoHouseLoading.value = false
+    yasnoHouseSearchDone.value = false
+    if (!query) {
+      yasnoHouseOptions.value = []
+    }
+    return
+  }
+
+  yasnoHouseLoading.value = true
+  yasnoHouseSearchDone.value = false
+  houseDebounceTimer = window.setTimeout(() => {
+    void searchYasnoHouses(query)
+  }, 350)
 })
 
 async function loadProject() {
@@ -128,6 +266,359 @@ async function loadProject() {
     error.value = e.message || 'Не вдалося завантажити адресу.'
   } finally {
     loading.value = false
+  }
+}
+
+function clearYasnoPreviewMessages() {
+  yasnoPreviewError.value = ''
+  yasnoSaveError.value = ''
+  yasnoSaveSuccess.value = ''
+}
+
+function cancelStreetAutocomplete() {
+  if (streetDebounceTimer) {
+    window.clearTimeout(streetDebounceTimer)
+    streetDebounceTimer = null
+  }
+  if (streetAbortController) {
+    streetAbortController.abort()
+    streetAbortController = null
+  }
+}
+
+function cancelHouseAutocomplete() {
+  if (houseDebounceTimer) {
+    window.clearTimeout(houseDebounceTimer)
+    houseDebounceTimer = null
+  }
+  if (houseAbortController) {
+    houseAbortController.abort()
+    houseAbortController = null
+  }
+}
+
+function resetYasnoStreetSelection() {
+  cancelStreetAutocomplete()
+  yasnoStreetOptions.value = []
+  yasnoStreetLoading.value = false
+  yasnoStreetSearchDone.value = false
+  yasnoSelection.value.streetQuery = ''
+  yasnoSelectedStreet.value = null
+}
+
+function resetYasnoHouseSelection() {
+  cancelHouseAutocomplete()
+  yasnoHouseOptions.value = []
+  yasnoHouseLoading.value = false
+  yasnoHouseSearchDone.value = false
+  yasnoSelection.value.houseQuery = ''
+  yasnoSelectedHouse.value = null
+}
+
+function hydrateYasnoSelection(config) {
+  if (!config) return
+  yasnoSelection.value.regionId = String(config.regionId || '')
+  yasnoSelection.value.dsoId = String(config.dsoId || '')
+  yasnoSelectedStreet.value = config.streetId
+    ? { id: config.streetId, name: config.streetName }
+    : null
+  yasnoSelectedHouse.value = config.houseId
+    ? { id: config.houseId, name: config.houseName }
+    : null
+  yasnoSelection.value.streetQuery = config.streetName || ''
+  yasnoSelection.value.houseQuery = config.houseName || ''
+  yasnoStreetOptions.value = yasnoSelectedStreet.value ? [yasnoSelectedStreet.value] : []
+  yasnoHouseOptions.value = yasnoSelectedHouse.value ? [yasnoSelectedHouse.value] : []
+}
+
+function buildYasnoPayload() {
+  if (!yasnoSelectedRegion.value || !yasnoSelectedDSO.value || !yasnoSelectedStreet.value || !yasnoSelectedHouse.value) {
+    return null
+  }
+  return {
+    regionId: yasnoSelectedRegion.value.id,
+    regionName: yasnoSelectedRegion.value.name,
+    dsoId: yasnoSelectedDSO.value.id,
+    dsoName: yasnoSelectedDSO.value.name,
+    streetId: yasnoSelectedStreet.value.id,
+    streetName: yasnoSelectedStreet.value.name,
+    houseId: yasnoSelectedHouse.value.id,
+    houseName: yasnoSelectedHouse.value.name
+  }
+}
+
+async function loadYasnoState(force = false) {
+  if ((yasnoLoaded.value && !force) || yasnoLoading.value) return
+
+  try {
+    yasnoLoading.value = true
+    yasnoError.value = ''
+    yasnoScheduleError.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno`, {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+
+    const data = await resp.json()
+    yasnoConfig.value = data.config || null
+    yasnoSchedule.value = data.schedule || null
+    yasnoScheduleError.value = data.scheduleError || ''
+    if (yasnoConfig.value) {
+      hydrateYasnoSelection(yasnoConfig.value)
+    }
+    if (!yasnoConfig.value) {
+      yasnoSchedule.value = null
+      yasnoScheduleError.value = ''
+    }
+    yasnoLoaded.value = true
+  } catch (e) {
+    yasnoError.value = e.message || 'Не вдалося завантажити налаштування графіка.'
+  } finally {
+    yasnoLoading.value = false
+  }
+}
+
+async function loadYasnoRegions(force = false) {
+  if ((yasnoRegions.value.length && !force) || yasnoRegionsLoading.value) return
+
+  try {
+    yasnoRegionsLoading.value = true
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno/regions`, {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    yasnoRegions.value = Array.isArray(data.regions) ? data.regions : []
+  } catch (e) {
+    yasnoError.value = e.message || 'Не вдалося завантажити список регіонів.'
+  } finally {
+    yasnoRegionsLoading.value = false
+  }
+}
+
+async function searchYasnoStreets(queryOverride = '') {
+  const query = String(queryOverride || yasnoSelection.value.streetQuery || '').trim()
+  if (!yasnoSelectedRegion.value || !yasnoSelectedDSO.value || query.length < 2) return
+  let controller = null
+  let requestID = 0
+
+  try {
+    requestID = ++streetRequestID
+    if (streetAbortController) {
+      streetAbortController.abort()
+    }
+    const controller = new AbortController()
+    streetAbortController = controller
+    clearYasnoPreviewMessages()
+    yasnoStreetLoading.value = true
+    yasnoStreetSearchDone.value = false
+    const params = new URLSearchParams({
+      regionId: String(yasnoSelectedRegion.value.id),
+      dsoId: String(yasnoSelectedDSO.value.id),
+      query
+    })
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno/streets?${params.toString()}`, {
+      credentials: 'include',
+      signal: controller.signal
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    if (requestID !== streetRequestID) return
+    yasnoStreetOptions.value = Array.isArray(data.streets) ? data.streets : []
+    yasnoStreetSearchDone.value = true
+  } catch (e) {
+    if (e?.name === 'AbortError') return
+    yasnoStreetOptions.value = []
+    yasnoStreetSearchDone.value = false
+    yasnoPreviewError.value = e.message || 'Не вдалося знайти вулицю.'
+  } finally {
+    if (streetAbortController === controller) {
+      streetAbortController = null
+    }
+    if (requestID === streetRequestID) {
+      yasnoStreetLoading.value = false
+    }
+  }
+}
+
+function chooseYasnoStreet(street) {
+  yasnoSelectedStreet.value = street
+  yasnoSelection.value.streetQuery = street.name
+  resetYasnoHouseSelection()
+  clearYasnoPreviewMessages()
+}
+
+async function searchYasnoHouses(queryOverride = '') {
+  const query = String(queryOverride || yasnoSelection.value.houseQuery || '').trim()
+  if (!yasnoSelectedRegion.value || !yasnoSelectedDSO.value || !yasnoSelectedStreet.value || query.length < 1) return
+  let controller = null
+  let requestID = 0
+
+  try {
+    requestID = ++houseRequestID
+    if (houseAbortController) {
+      houseAbortController.abort()
+    }
+    const controller = new AbortController()
+    houseAbortController = controller
+    clearYasnoPreviewMessages()
+    yasnoHouseLoading.value = true
+    yasnoHouseSearchDone.value = false
+    const params = new URLSearchParams({
+      regionId: String(yasnoSelectedRegion.value.id),
+      dsoId: String(yasnoSelectedDSO.value.id),
+      streetId: String(yasnoSelectedStreet.value.id),
+      query
+    })
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno/houses?${params.toString()}`, {
+      credentials: 'include',
+      signal: controller.signal
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    if (requestID !== houseRequestID) return
+    yasnoHouseOptions.value = Array.isArray(data.houses) ? data.houses : []
+    yasnoHouseSearchDone.value = true
+  } catch (e) {
+    if (e?.name === 'AbortError') return
+    yasnoHouseOptions.value = []
+    yasnoHouseSearchDone.value = false
+    yasnoPreviewError.value = e.message || 'Не вдалося знайти будинок.'
+  } finally {
+    if (houseAbortController === controller) {
+      houseAbortController = null
+    }
+    if (requestID === houseRequestID) {
+      yasnoHouseLoading.value = false
+    }
+  }
+}
+
+function chooseYasnoHouse(house) {
+  yasnoSelectedHouse.value = house
+  yasnoSelection.value.houseQuery = house.name
+  clearYasnoPreviewMessages()
+}
+
+async function previewYasnoSchedule() {
+  const payload = buildYasnoPayload()
+  if (!payload || yasnoPreviewLoading.value) return
+
+  try {
+    yasnoPreviewLoading.value = true
+    yasnoPreviewError.value = ''
+    yasnoSaveError.value = ''
+    yasnoSaveSuccess.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno/preview`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    yasnoConfig.value = data.config || yasnoConfig.value
+    yasnoSchedule.value = data.schedule || null
+    yasnoScheduleError.value = ''
+  } catch (e) {
+    yasnoPreviewError.value = e.message || 'Не вдалося отримати графік.'
+  } finally {
+    yasnoPreviewLoading.value = false
+  }
+}
+
+async function saveYasnoSchedule() {
+  const payload = buildYasnoPayload()
+  if (!payload || yasnoSaveLoading.value) return
+
+  try {
+    yasnoSaveLoading.value = true
+    yasnoSaveError.value = ''
+    yasnoSaveSuccess.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    const data = await resp.json()
+    yasnoConfig.value = data.config || null
+    yasnoSchedule.value = data.schedule || null
+    yasnoScheduleError.value = ''
+    yasnoSaveSuccess.value = 'Графік Yasno підключено до цього проєкту.'
+    project.value = {
+      ...project.value,
+      hasOutageSchedule: true
+    }
+    yasnoLoaded.value = true
+  } catch (e) {
+    yasnoSaveError.value = e.message || 'Не вдалося зберегти групу.'
+  } finally {
+    yasnoSaveLoading.value = false
+  }
+}
+
+async function deleteYasnoSchedule() {
+  if (!yasnoConfig.value || yasnoDeleteLoading.value) return
+
+  const confirmed = window.confirm('Відключити графік Yasno для цього проєкту?')
+  if (!confirmed) return
+
+  try {
+    yasnoDeleteLoading.value = true
+    yasnoSaveError.value = ''
+    yasnoSaveSuccess.value = ''
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/yasno`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+    yasnoConfig.value = null
+    yasnoSchedule.value = null
+    yasnoScheduleError.value = ''
+    project.value = {
+      ...project.value,
+      hasOutageSchedule: false
+    }
+    resetYasnoStreetSelection()
+    resetYasnoHouseSelection()
+    yasnoSelection.value.regionId = ''
+    yasnoSelection.value.dsoId = ''
+    yasnoSaveSuccess.value = 'Графік Yasno відключено.'
+  } catch (e) {
+    yasnoSaveError.value = e.message || 'Не вдалося відключити графік.'
+  } finally {
+    yasnoDeleteLoading.value = false
   }
 }
 
@@ -453,6 +944,9 @@ async function prepareFirmware() {
         <button class="settings-tab-btn" :class="{ active: activeTab === 'integration' }" type="button" @click="activeTab = 'integration'">
           Інтеграція
         </button>
+        <button class="settings-tab-btn" :class="{ active: activeTab === 'yasno' }" type="button" @click="activeTab = 'yasno'">
+          Графік відключень
+        </button>
         <button class="settings-tab-btn" :class="{ active: activeTab === 'telegram-bot' }" type="button" @click="activeTab = 'telegram-bot'">
           Телеграм бот
         </button>
@@ -521,6 +1015,144 @@ async function prepareFirmware() {
         <p class="field-label">Приклад запиту</p>
         <pre class="code-block"><code>curl -X POST '{{ pingEndpoint }}' \
   -H 'X-Project-Secret: {{ revealSecret ? project.secret : "<your-project-secret>" }}'</code></pre>
+      </section>
+
+      <section v-else-if="activeTab === 'yasno'" class="settings-form-card integration-card yasno-settings-card">
+        <h2>Графік відключень</h2>
+        <p class="sub">Підберіть вашу адресу в Yasno, перевірте сьогоднішній графік та підтвердьте знайдену групу.</p>
+
+        <div class="yasno-steps">
+          <div class="yasno-step-field">
+            <label class="field-label" for="yasno-region">1. Оберіть регіон</label>
+            <select id="yasno-region" v-model="yasnoSelection.regionId" class="field-input" :disabled="yasnoRegionsLoading">
+              <option value="">Оберіть регіон</option>
+              <option v-for="region in yasnoRegions" :key="region.id" :value="String(region.id)">{{ region.name }}</option>
+            </select>
+          </div>
+
+          <div class="yasno-step-field">
+            <label class="field-label" for="yasno-dso">2. Оберіть оператора</label>
+            <select id="yasno-dso" v-model="yasnoSelection.dsoId" class="field-input" :disabled="!yasnoSelectedRegion">
+              <option value="">Оберіть оператора</option>
+              <option v-for="item in yasnoDSOOptions" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
+            </select>
+          </div>
+
+          <div class="yasno-step-field">
+            <label class="field-label" for="yasno-street">3. Знайдіть вулицю</label>
+            <div class="yasno-autocomplete">
+              <input
+                id="yasno-street"
+                v-model="yasnoSelection.streetQuery"
+                type="text"
+                class="field-input"
+                :disabled="!yasnoSelectedRegion || !yasnoSelectedDSO"
+                autocomplete="off"
+                placeholder="Почніть вводити назву вулиці"
+              />
+              <div v-if="yasnoStreetAutocompleteOpen" class="yasno-autocomplete-panel">
+                <p v-if="yasnoStreetLoading" class="yasno-autocomplete-status">Шукаємо вулиці…</p>
+                <div v-else-if="yasnoStreetOptions.length" class="yasno-autocomplete-list">
+                  <button
+                    v-for="street in yasnoStreetOptions"
+                    :key="street.id"
+                    type="button"
+                    class="yasno-autocomplete-option"
+                    @click="chooseYasnoStreet(street)"
+                  >
+                    {{ street.name }}
+                  </button>
+                </div>
+                <p v-else-if="yasnoStreetSearchDone" class="yasno-autocomplete-empty">
+                  Вулицю не знайдено. Спробуйте іншу форму назви або менше слів.
+                </p>
+              </div>
+            </div>
+            <p v-if="yasnoSelectedStreet" class="helper-text yasno-selected-option">Обрано: {{ yasnoSelectedStreet.name }}</p>
+            <p v-else class="helper-text">Вводьте назву, а список підтягнеться автоматично.</p>
+          </div>
+
+          <div class="yasno-step-field">
+            <label class="field-label" for="yasno-house">4. Знайдіть будинок</label>
+            <div class="yasno-autocomplete">
+              <input
+                id="yasno-house"
+                v-model="yasnoSelection.houseQuery"
+                type="text"
+                class="field-input"
+                :disabled="!yasnoSelectedStreet"
+                autocomplete="off"
+                placeholder="Почніть вводити номер будинку"
+              />
+              <div v-if="yasnoHouseAutocompleteOpen" class="yasno-autocomplete-panel">
+                <p v-if="yasnoHouseLoading" class="yasno-autocomplete-status">Шукаємо будинок…</p>
+                <div v-else-if="yasnoHouseOptions.length" class="yasno-autocomplete-list">
+                  <button
+                    v-for="house in yasnoHouseOptions"
+                    :key="house.id"
+                    type="button"
+                    class="yasno-autocomplete-option"
+                    @click="chooseYasnoHouse(house)"
+                  >
+                    {{ house.name }}
+                  </button>
+                </div>
+                <p v-else-if="yasnoHouseSearchDone" class="yasno-autocomplete-empty">
+                  Будинок не знайдено. Перевірте формат номера або спробуйте коротший запит.
+                </p>
+              </div>
+            </div>
+            <p v-if="yasnoSelectedHouse" class="helper-text yasno-selected-option">Обрано: {{ yasnoSelectedHouse.name }}</p>
+            <p v-else class="helper-text">
+              {{ yasnoSelectedStreet ? 'Вводьте номер будинку, і варіанти з’являться автоматично.' : 'Пошук будинку стане доступним після вибору вулиці.' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="settings-form-actions">
+          <button class="primary-btn" type="button" :disabled="!yasnoCanPreview || yasnoPreviewLoading" @click="previewYasnoSchedule">
+            {{ yasnoPreviewLoading ? 'Перевіряємо…' : 'Показати графік' }}
+          </button>
+          <button
+            v-if="yasnoSchedule"
+            class="secondary-btn"
+            type="button"
+            :disabled="yasnoSaveLoading"
+            @click="saveYasnoSchedule"
+          >
+            {{ yasnoSaveLoading ? 'Збереження…' : 'Підтвердити групу' }}
+          </button>
+          <button
+            v-if="yasnoConfig"
+            class="secondary-btn danger-btn"
+            type="button"
+            :disabled="yasnoDeleteLoading"
+            @click="deleteYasnoSchedule"
+          >
+            {{ yasnoDeleteLoading ? 'Відключення…' : 'Відключити Yasno' }}
+          </button>
+        </div>
+
+        <p v-if="yasnoRegionsLoading || yasnoLoading" class="sub">Завантаження довідників Yasno…</p>
+        <p v-if="yasnoError" class="error form-error">{{ yasnoError }}</p>
+        <p v-if="yasnoPreviewError" class="error form-error">{{ yasnoPreviewError }}</p>
+        <p v-if="yasnoSaveError" class="error form-error">{{ yasnoSaveError }}</p>
+        <p v-if="yasnoSaveSuccess" class="success form-success">{{ yasnoSaveSuccess }}</p>
+        <p v-if="yasnoScheduleError" class="error form-error">{{ yasnoScheduleError }}</p>
+
+        <div v-if="yasnoConfig" class="yasno-current-config">
+          <p class="field-label">Поточна привʼязка</p>
+          <p class="helper-text">
+            {{ yasnoConfig.regionName }} · {{ yasnoConfig.dsoName }} · {{ yasnoConfig.streetName }}, {{ yasnoConfig.houseName }} · група {{ yasnoConfig.group }}
+          </p>
+        </div>
+
+        <OutageScheduleCard
+          v-if="yasnoSchedule"
+          :schedule="yasnoSchedule"
+          title="Підтвердження групи"
+          subtitle="Перевірте, чи збігається адреса і сьогоднішній графік."
+        />
       </section>
 
       <section v-else-if="activeTab === 'telegram-bot'" class="settings-form-card integration-card telegram-bot-card">

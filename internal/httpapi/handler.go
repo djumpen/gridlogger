@@ -26,6 +26,7 @@ type Handler struct {
 	projectCatalog       *service.ProjectCatalogService
 	projectNotifications *service.ProjectNotificationService
 	firmwareBuilds       *service.FirmwareGatewayService
+	yasnoSchedules       *service.YasnoScheduleService
 	telegramAuth         *service.TelegramAuthService
 	sessionAuth          *service.SessionService
 	defaultProjectID     int
@@ -41,6 +42,7 @@ func NewHandler(
 	projectCatalog *service.ProjectCatalogService,
 	projectNotifications *service.ProjectNotificationService,
 	firmwareBuilds *service.FirmwareGatewayService,
+	yasnoSchedules *service.YasnoScheduleService,
 	telegramAuth *service.TelegramAuthService,
 	sessionAuth *service.SessionService,
 	defaultProjectID int,
@@ -54,6 +56,7 @@ func NewHandler(
 		projectCatalog:       projectCatalog,
 		projectNotifications: projectNotifications,
 		firmwareBuilds:       firmwareBuilds,
+		yasnoSchedules:       yasnoSchedules,
 		telegramAuth:         telegramAuth,
 		sessionAuth:          sessionAuth,
 		defaultProjectID:     defaultProjectID,
@@ -79,6 +82,13 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}", h.handleSettingsProject)
 	h.mux.HandleFunc("POST /api/settings/projects/{projectId}", h.handleSettingsProjectUpdate)
 	h.mux.HandleFunc("DELETE /api/settings/projects/{projectId}", h.handleSettingsProjectDelete)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/yasno", h.handleSettingsProjectYasnoGet)
+	h.mux.HandleFunc("POST /api/settings/projects/{projectId}/yasno", h.handleSettingsProjectYasnoSave)
+	h.mux.HandleFunc("DELETE /api/settings/projects/{projectId}/yasno", h.handleSettingsProjectYasnoDelete)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/yasno/regions", h.handleSettingsProjectYasnoRegions)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/yasno/streets", h.handleSettingsProjectYasnoStreets)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/yasno/houses", h.handleSettingsProjectYasnoHouses)
+	h.mux.HandleFunc("POST /api/settings/projects/{projectId}/yasno/preview", h.handleSettingsProjectYasnoPreview)
 	h.mux.HandleFunc("POST /api/settings/projects/{projectId}/firmware/jobs", h.handleFirmwareJobCreate)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}", h.handleFirmwareJobGet)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/manifest.json", h.handleFirmwareManifest)
@@ -91,6 +101,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
+	h.mux.HandleFunc("GET /api/projects/{projectId}/yasno", h.handleProjectYasnoSchedule)
 
 	h.mux.HandleFunc("GET /api/auth/telegram/config", h.handleTelegramConfig)
 	h.mux.HandleFunc("POST /api/auth/telegram/callback", h.handleTelegramCallback)
@@ -314,6 +325,225 @@ func (h *Handler) handleSettingsProjectDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleSettingsProjectYasnoGet(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config, schedule, scheduleError, err := h.yasnoSchedules.GetForUser(r.Context(), userID, projectID)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"config":        config,
+		"schedule":      schedule,
+		"scheduleError": scheduleError,
+	})
+}
+
+func (h *Handler) handleSettingsProjectYasnoSave(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	in, err := parseYasnoSelectionInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	config, schedule, err := h.yasnoSchedules.SaveForUser(r.Context(), userID, projectID, in)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"config":   config,
+		"schedule": schedule,
+	})
+}
+
+func (h *Handler) handleSettingsProjectYasnoDelete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := h.yasnoSchedules.DeleteForUser(r.Context(), userID, projectID); err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) handleSettingsProjectYasnoRegions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	regions, err := h.yasnoSchedules.ListRegions(r.Context(), userID, projectID)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"regions": regions})
+}
+
+func (h *Handler) handleSettingsProjectYasnoStreets(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	regionID, err := parsePositiveQueryInt(r, "regionId")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	dsoID, err := parsePositiveQueryInt(r, "dsoId")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	items, err := h.yasnoSchedules.SearchStreets(r.Context(), userID, projectID, regionID, dsoID, query)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"streets": items})
+}
+
+func (h *Handler) handleSettingsProjectYasnoHouses(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	regionID, err := parsePositiveQueryInt(r, "regionId")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	streetID, err := parsePositiveQueryInt(r, "streetId")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	dsoID, err := parsePositiveQueryInt(r, "dsoId")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	items, err := h.yasnoSchedules.SearchHouses(r.Context(), userID, projectID, regionID, streetID, dsoID, query)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"houses": items})
+}
+
+func (h *Handler) handleSettingsProjectYasnoPreview(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	in, err := parseYasnoSelectionInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	config, schedule, err := h.yasnoSchedules.PreviewForUser(r.Context(), userID, projectID, in)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"config":   config,
+		"schedule": schedule,
+	})
+}
+
+func (h *Handler) handleProjectYasnoSchedule(w http.ResponseWriter, r *http.Request) {
+	if h.yasnoSchedules == nil {
+		http.Error(w, "yasno schedules are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	schedule, err := h.yasnoSchedules.GetPublicSchedule(r.Context(), projectID)
+	if err != nil {
+		h.writeYasnoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"schedule": schedule})
 }
 
 func (h *Handler) handleFirmwareJobCreate(w http.ResponseWriter, r *http.Request) {
@@ -786,6 +1016,17 @@ type telegramBotGroupInput struct {
 	Title string `json:"title"`
 }
 
+type yasnoSelectionInput struct {
+	RegionID   int    `json:"regionId"`
+	RegionName string `json:"regionName"`
+	DSOID      int    `json:"dsoId"`
+	DSOName    string `json:"dsoName"`
+	StreetID   int    `json:"streetId"`
+	StreetName string `json:"streetName"`
+	HouseID    int    `json:"houseId"`
+	HouseName  string `json:"houseName"`
+}
+
 func parseProjectInput(r *http.Request) (projectInput, error) {
 	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 	if strings.Contains(ct, "application/json") {
@@ -879,6 +1120,46 @@ func parseTelegramBotGroupInput(r *http.Request) (telegramBotGroupInput, error) 
 	return in, nil
 }
 
+func parseYasnoSelectionInput(r *http.Request) (service.YasnoSelectionInput, error) {
+	var in yasnoSelectionInput
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if !strings.Contains(ct, "application/json") {
+		return service.YasnoSelectionInput{}, errors.New("content type must be application/json")
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		return service.YasnoSelectionInput{}, errors.New("invalid json payload")
+	}
+	out := service.YasnoSelectionInput{
+		RegionID:   in.RegionID,
+		RegionName: strings.TrimSpace(in.RegionName),
+		DSOID:      in.DSOID,
+		DSOName:    strings.TrimSpace(in.DSOName),
+		StreetID:   in.StreetID,
+		StreetName: strings.TrimSpace(in.StreetName),
+		HouseID:    in.HouseID,
+		HouseName:  strings.TrimSpace(in.HouseName),
+	}
+	if out.RegionID <= 0 || out.DSOID <= 0 || out.StreetID <= 0 || out.HouseID <= 0 {
+		return service.YasnoSelectionInput{}, errors.New("regionId, dsoId, streetId, and houseId are required")
+	}
+	if out.RegionName == "" || out.DSOName == "" || out.StreetName == "" || out.HouseName == "" {
+		return service.YasnoSelectionInput{}, errors.New("regionName, dsoName, streetName, and houseName are required")
+	}
+	return out, nil
+}
+
+func parsePositiveQueryInt(r *http.Request, key string) (int, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid %s", key)
+	}
+	return value, nil
+}
+
 func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrProjectInvalidData), errors.Is(err, service.ErrProjectInvalidSlug):
@@ -932,6 +1213,22 @@ func (h *Handler) writeTelegramBotGroupError(w http.ResponseWriter, err error) {
 	default:
 		log.Printf("telegram bot group request error: %v", err)
 		http.Error(w, "telegram bot group operation failed", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) writeYasnoError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrProjectInvalidData), errors.Is(err, service.ErrYasnoInvalidInput):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrProjectForbidden):
+		http.Error(w, err.Error(), http.StatusForbidden)
+	case errors.Is(err, service.ErrProjectNotFound), errors.Is(err, service.ErrYasnoLookupNotFound), errors.Is(err, service.ErrYasnoNotConfigured), errors.Is(err, service.ErrYasnoScheduleMissing):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, service.ErrYasnoUnavailable):
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	default:
+		log.Printf("yasno request error: %v", err)
+		http.Error(w, "yasno operation failed", http.StatusInternalServerError)
 	}
 }
 

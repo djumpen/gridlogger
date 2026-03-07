@@ -11,7 +11,7 @@ func TestNormalizeSlug(t *testing.T) {
 		want      string
 		wantError bool
 	}{
-		{name: "valid lowercase", raw: "36b", want: "36b"},
+		{name: "valid lowercase", raw: "saksa-12a", want: "saksa-12a"},
 		{name: "trim and lowercase", raw: "Lesi-8B ", want: "lesi-8b"},
 		{name: "too short", raw: "ab", wantError: true},
 		{name: "invalid chars", raw: "a b", wantError: true},

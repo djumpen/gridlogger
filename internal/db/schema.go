@@ -97,6 +97,21 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_project_status_state_last_changed_at
 			ON project_status_state(last_changed_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS dtek_groups (
+			project_id BIGINT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+			region_id INTEGER NOT NULL,
+			region_name TEXT NOT NULL DEFAULT '',
+			dso_id INTEGER NOT NULL,
+			dso_name TEXT NOT NULL DEFAULT '',
+			street_id INTEGER NOT NULL,
+			street_name TEXT NOT NULL DEFAULT '',
+			house_id INTEGER NOT NULL,
+			house_name TEXT NOT NULL DEFAULT '',
+			group_key TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_dtek_groups_group_key ON dtek_groups(group_key)`,
 	}
 	for _, q := range stmts {
 		if _, err := pool.Exec(ctx, q); err != nil {

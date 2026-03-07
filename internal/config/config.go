@@ -30,6 +30,8 @@ type Config struct {
 	FirmwareServiceToken     string
 	FirmwareServiceTimeout   time.Duration
 	FirmwarePingBaseURL      string
+	YasnoBaseURL             string
+	YasnoTimeout             time.Duration
 
 	TestEnv string
 }
@@ -51,6 +53,8 @@ func Load() (Config, error) {
 		FirmwareServiceToken:     strings.TrimSpace(os.Getenv("FIRMWARE_SERVICE_TOKEN")),
 		FirmwareServiceTimeout:   30 * time.Second,
 		FirmwarePingBaseURL:      getenv("FIRMWARE_PING_BASE_URL", "https://svitlo.homes"),
+		YasnoBaseURL:             getenv("YASNO_BASE_URL", "https://app.yasno.ua/api/blackout-service/public/shutdowns"),
+		YasnoTimeout:             15 * time.Second,
 
 		TestEnv: getenv("TEST_ENV", "Not set"),
 	}
@@ -134,11 +138,21 @@ func Load() (Config, error) {
 		}
 		cfg.FirmwareServiceTimeout = time.Duration(v) * time.Second
 	}
+	if raw := os.Getenv("YASNO_TIMEOUT_SECONDS"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v <= 0 {
+			return Config{}, errors.New("YASNO_TIMEOUT_SECONDS must be a positive integer")
+		}
+		cfg.YasnoTimeout = time.Duration(v) * time.Second
+	}
 	if strings.TrimSpace(cfg.FirmwareServiceURL) == "" {
 		return Config{}, errors.New("FIRMWARE_SERVICE_URL must not be empty")
 	}
 	if strings.TrimSpace(cfg.FirmwarePingBaseURL) == "" {
 		return Config{}, errors.New("FIRMWARE_PING_BASE_URL must not be empty")
+	}
+	if strings.TrimSpace(cfg.YasnoBaseURL) == "" {
+		return Config{}, errors.New("YASNO_BASE_URL must not be empty")
 	}
 
 	authFieldCount := 0

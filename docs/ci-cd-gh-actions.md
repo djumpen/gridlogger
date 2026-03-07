@@ -6,18 +6,24 @@ This document describes the GitHub Actions pipeline in `.github/workflows/ci-cd.
 
 On every push to `main` (including merge commits), it runs:
 
-1. `test`
+1. `version`
+   - Fetches git tags/history
+   - Calculates next semantic version from Conventional Commits since the latest `vX.Y.Z` tag
+2. `test`
    - Go tests (`go test ./...`)
    - Frontend build (`npm ci && npm run build`)
-2. `build-and-push`
+3. `build-and-push`
   - Builds backend image from `Dockerfile.backend`
   - Builds frontend image from `Dockerfile.frontend`
   - Pushes both to GHCR with tags:
-    - `ghcr.io/djumpen/gridlogger-backend:<sha>` and `:latest`
-    - `ghcr.io/djumpen/gridlogger-frontend:<sha>` and `:latest`
-3. `deploy`
+    - `ghcr.io/djumpen/gridlogger-backend:<version>`, `:<sha>`, and `:latest`
+    - `ghcr.io/djumpen/gridlogger-frontend:<version>`, `:<sha>`, and `:latest`
+  - Adds OCI image labels for version, revision, and build date
+4. `create-release-tag`
+   - Creates git tag `v<version>` after images are pushed successfully
+5. `deploy`
    - Applies manifests: `kubectl apply -k k8s/overlays/prod`
-  - Updates backend and frontend deployment images to SHA tags
+  - Updates backend and frontend deployment images to semantic version tags
   - Waits for rollout to finish for both deployments
 
 The deploy job is gated to `main` only.
@@ -74,10 +80,10 @@ The pipeline applies manifests first, then updates deployment image explicitly:
 
 ```bash
 kubectl -n "$K8S_NAMESPACE" set image deployment/backend \
-  backend="ghcr.io/djumpen/gridlogger-backend:${GITHUB_SHA}"
+  backend="ghcr.io/djumpen/gridlogger-backend:${VERSION}"
 
 kubectl -n "$K8S_NAMESPACE" set image deployment/frontend \
-  frontend="ghcr.io/djumpen/gridlogger-frontend:${GITHUB_SHA}"
+  frontend="ghcr.io/djumpen/gridlogger-frontend:${VERSION}"
 ```
 
 Then waits for successful rollout:
@@ -104,7 +110,56 @@ spec:
           image: ghcr.io/djumpen/gridlogger-backend:latest
 ```
 
-At deploy time, Actions replaces backend/frontend images with SHA tags from current commit.
+At deploy time, Actions replaces backend/frontend images with semantic version tags from the current release and annotates deployments with `app.kubernetes.io/version`.
+
+## Conventional Commit rules
+
+Release bump logic:
+
+- `feat:` -> minor bump
+- `fix:`, `chore:`, `refactor:`, `docs:`, and other non-breaking commit types -> patch bump
+- `type(scope)!:` or `BREAKING CHANGE:` in commit body -> major bump
+
+Example:
+
+```text
+feat: add telegram bot group subscriptions
+fix: handle duplicate telegram group titles
+refactor!: replace legacy rollout flow
+```
+
+You can preview the next version locally with:
+
+```bash
+sh scripts/next-version.sh
+```
+
+## Rollback
+
+Rollback is image-based, not migration-based:
+
+```bash
+sh scripts/rollout-version.sh 1.4.2
+sh scripts/rollout-version.sh v1.4.2 --with-firmware
+```
+
+The script updates Kubernetes deployments to an already-published image tag and waits for rollout success.
+
+### Migration rollback policy
+
+Automatic SQL rollback is intentionally **not** part of the rollout script.
+
+Reason:
+- rolling back app containers is fast and low-risk
+- rolling back database state is often lossy or unsafe
+- this project already favors additive schema changes, which is the correct rollback-friendly strategy
+
+Recommended rule:
+
+1. Make migrations additive and backward-compatible.
+2. Deploy schema expansion first.
+3. Deploy application code that starts using the new schema.
+4. Only remove old columns/tables in a later release after the old code is no longer needed.
 
 ---
 
@@ -128,8 +183,8 @@ docker build -f Dockerfile.frontend -t ghcr.io/djumpen/gridlogger-frontend:local
 
 ```bash
 kubectl apply -k k8s/overlays/prod
-kubectl -n gridlogger set image deployment/backend backend=ghcr.io/djumpen/gridlogger-backend:<sha>
-kubectl -n gridlogger set image deployment/frontend frontend=ghcr.io/djumpen/gridlogger-frontend:<sha>
+kubectl -n gridlogger set image deployment/backend backend=ghcr.io/djumpen/gridlogger-backend:<version>
+kubectl -n gridlogger set image deployment/frontend frontend=ghcr.io/djumpen/gridlogger-frontend:<version>
 kubectl -n gridlogger rollout status deployment/backend --timeout=180s
 kubectl -n gridlogger rollout status deployment/frontend --timeout=180s
 ```
@@ -173,7 +228,7 @@ act push -j test
 
 ### Frontend rollout does not pick new image
 
-- Verify frontend image exists in GHCR with the current SHA tag
+- Verify frontend image exists in GHCR with the expected semantic version tag
 - Check rollout status and pod events:
   ```bash
   kubectl -n gridlogger rollout status deployment/frontend --timeout=180s
