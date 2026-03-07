@@ -69,6 +69,8 @@ Tables:
 - `users`
   - `id` (internal primary key used in sessions)
   - `telegram_id` (unique, nullable, references `telegram_accounts.telegram_id`)
+  - `is_virtual` (`true` only for project-owned Telegram group subscribers)
+  - `owner_id` (real user that owns a virtual subscriber)
   - `created_at`
   - `updated_at`
 - `telegram_accounts`
@@ -83,6 +85,10 @@ Tables:
   - `updated_at`
   - `is_blocked` (future admin control)
   - `is_admin` (future admin control)
+  - `chat_type` (`private` for real users, `group`/`supergroup` for virtual group chats)
+  - `chat_title` (Telegram group title for virtual group chats)
+
+Virtual Telegram groups are stored as ordinary Telegram identities plus `users.is_virtual=true`, which lets the existing notification subscription flow reuse the same `project_notification_subscriptions` table and dispatcher.
 
 ## 6) API summary
 

@@ -83,6 +83,9 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}", h.handleFirmwareJobGet)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/manifest.json", h.handleFirmwareManifest)
 	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/firmware/jobs/{jobId}/files/{fileName}", h.handleFirmwareFile)
+	h.mux.HandleFunc("GET /api/settings/projects/{projectId}/telegram-bot/groups", h.handleTelegramBotGroupsList)
+	h.mux.HandleFunc("POST /api/settings/projects/{projectId}/telegram-bot/groups", h.handleTelegramBotGroupsCreate)
+	h.mux.HandleFunc("DELETE /api/settings/projects/{projectId}/telegram-bot/groups/{virtualUserId}", h.handleTelegramBotGroupsDelete)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionGet)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/notifications/subscription", h.handleProjectNotificationSubscriptionPost)
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
@@ -501,6 +504,93 @@ func (h *Handler) handleProjectNotificationSubscriptionPost(w http.ResponseWrite
 	})
 }
 
+func (h *Handler) handleTelegramBotGroupsList(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	groups, err := h.projectNotifications.ListTelegramBotGroupsByProject(r.Context(), userID, projectID)
+	if err != nil {
+		h.writeTelegramBotGroupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"botUsername": h.telegramBotUsername,
+		"groups":      groups,
+	})
+}
+
+func (h *Handler) handleTelegramBotGroupsCreate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	in, err := parseTelegramBotGroupInput(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	group, err := h.projectNotifications.AddTelegramBotGroupToProject(r.Context(), userID, projectID, in.Title)
+	if err != nil {
+		h.writeTelegramBotGroupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"group": group,
+	})
+}
+
+func (h *Handler) handleTelegramBotGroupsDelete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUserID(w, r)
+	if !ok {
+		return
+	}
+	if h.projectNotifications == nil {
+		http.Error(w, "project notifications are not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	virtualUserID, err := strconv.ParseInt(strings.TrimSpace(r.PathValue("virtualUserId")), 10, 64)
+	if err != nil || virtualUserID <= 0 {
+		http.Error(w, "invalid virtualUserId", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.projectNotifications.RemoveTelegramBotGroupFromProject(r.Context(), userID, projectID, virtualUserID); err != nil {
+		h.writeTelegramBotGroupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *Handler) handleTelegramConfig(w http.ResponseWriter, _ *http.Request) {
 	enabled := h.authEnabled()
 	resp := map[string]any{
@@ -692,6 +782,10 @@ type firmwareJobCreateInput struct {
 	Password string `json:"password"`
 }
 
+type telegramBotGroupInput struct {
+	Title string `json:"title"`
+}
+
 func parseProjectInput(r *http.Request) (projectInput, error) {
 	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 	if strings.Contains(ct, "application/json") {
@@ -769,6 +863,22 @@ func parseFirmwareJobCreateInput(r *http.Request) (firmwareJobCreateInput, error
 	return in, nil
 }
 
+func parseTelegramBotGroupInput(r *http.Request) (telegramBotGroupInput, error) {
+	var in telegramBotGroupInput
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if !strings.Contains(ct, "application/json") {
+		return telegramBotGroupInput{}, errors.New("content type must be application/json")
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		return telegramBotGroupInput{}, errors.New("invalid json payload")
+	}
+	in.Title = strings.TrimSpace(in.Title)
+	if in.Title == "" {
+		return telegramBotGroupInput{}, errors.New("title is required")
+	}
+	return in, nil
+}
+
 func (h *Handler) writeProjectError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrProjectInvalidData), errors.Is(err, service.ErrProjectInvalidSlug):
@@ -802,6 +912,26 @@ func (h *Handler) writeFirmwareError(w http.ResponseWriter, err error) {
 	default:
 		log.Printf("firmware request error: %v", err)
 		http.Error(w, "firmware operation failed", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) writeTelegramBotGroupError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrProjectInvalidData):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, service.ErrProjectForbidden):
+		http.Error(w, err.Error(), http.StatusForbidden)
+	case errors.Is(err, service.ErrProjectNotFound), errors.Is(err, service.ErrTelegramBotGroupMissing), errors.Is(err, service.ErrTelegramBotGroupNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, service.ErrTelegramBotDisabled):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+	case errors.Is(err, service.ErrTelegramBotGroupAmbiguous):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, service.ErrTelegramBotGroupConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+	default:
+		log.Printf("telegram bot group request error: %v", err)
+		http.Error(w, "telegram bot group operation failed", http.StatusInternalServerError)
 	}
 }
 

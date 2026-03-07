@@ -40,6 +40,16 @@ const firmwareHint = ref('')
 const firmwareManifestURL = ref('')
 const firmwareScriptReady = ref(false)
 const firmwareScriptLoading = ref(false)
+const telegramBotGroups = ref([])
+const telegramBotLoading = ref(false)
+const telegramBotLoaded = ref(false)
+const telegramBotError = ref('')
+const telegramBotTitle = ref('')
+const telegramBotSaving = ref(false)
+const telegramBotSaveError = ref('')
+const telegramBotSuccess = ref('')
+const telegramBotDeleting = ref({})
+const telegramBotUsername = ref('svitlohomes_bot')
 
 const slugError = computed(() => {
   const slug = String(form.value.slug || '').trim().toLowerCase()
@@ -58,12 +68,23 @@ const maskedSecret = computed(() => {
 })
 
 const pingEndpoint = computed(() => `${window.location.origin}/api/projects/${props.projectId}/ping`)
+const telegramBotHandle = computed(() => {
+  const username = String(telegramBotUsername.value || '').trim().replace(/^@+/, '')
+  return username ? `@${username}` : '@svitlohomes_bot'
+})
+const telegramBotStartGroupLink = computed(() => {
+  const username = String(telegramBotUsername.value || '').trim().replace(/^@+/, '')
+  return username ? `https://t.me/${username}?startgroup=gridlogger` : ''
+})
 
 onMounted(() => {
   loadProject()
 })
 
 watch(activeTab, (tab) => {
+  if (tab === 'telegram-bot') {
+    void loadTelegramBotGroups()
+  }
   if (tab === 'firmware') {
     void ensureEspWebInstallButton()
   }
@@ -160,6 +181,107 @@ async function saveProject() {
     saveError.value = e.message || 'Не вдалося зберегти зміни.'
   } finally {
     saving.value = false
+  }
+}
+
+async function loadTelegramBotGroups(force = false) {
+  if ((telegramBotLoaded.value && !force) || telegramBotLoading.value) return
+
+  try {
+    telegramBotLoading.value = true
+    telegramBotError.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/telegram-bot/groups`, {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+
+    const data = await resp.json()
+    telegramBotGroups.value = Array.isArray(data.groups) ? data.groups : []
+    telegramBotUsername.value = data.botUsername || telegramBotUsername.value
+    telegramBotLoaded.value = true
+  } catch (e) {
+    telegramBotError.value = e.message || 'Не вдалося завантажити список груп.'
+  } finally {
+    telegramBotLoading.value = false
+  }
+}
+
+function upsertTelegramBotGroup(nextGroup) {
+  const current = Array.isArray(telegramBotGroups.value) ? telegramBotGroups.value : []
+  const filtered = current.filter((item) => item.virtualUserId !== nextGroup.virtualUserId)
+  telegramBotGroups.value = [...filtered, nextGroup].sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+}
+
+async function addTelegramBotGroup() {
+  const title = String(telegramBotTitle.value || '').trim()
+  if (!title) {
+    telegramBotSaveError.value = 'Вкажіть повну назву групи.'
+    return
+  }
+
+  try {
+    telegramBotSaving.value = true
+    telegramBotSaveError.value = ''
+    telegramBotSuccess.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/telegram-bot/groups`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ title })
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+
+    const data = await resp.json()
+    if (data.group) {
+      upsertTelegramBotGroup(data.group)
+    }
+    telegramBotTitle.value = ''
+    telegramBotLoaded.value = true
+    telegramBotSuccess.value = 'Групу підключено до Telegram сповіщень цього проєкту.'
+  } catch (e) {
+    telegramBotSaveError.value = e.message || 'Не вдалося підключити групу.'
+  } finally {
+    telegramBotSaving.value = false
+  }
+}
+
+async function removeTelegramBotGroup(group) {
+  if (!group?.virtualUserId || telegramBotDeleting.value[group.virtualUserId]) return
+
+  const confirmed = window.confirm(`Видалити групу "${group.title}" зі сповіщень цього проєкту?`)
+  if (!confirmed) return
+
+  try {
+    telegramBotDeleting.value = { ...telegramBotDeleting.value, [group.virtualUserId]: true }
+    telegramBotError.value = ''
+    telegramBotSuccess.value = ''
+
+    const resp = await fetch(`/api/settings/projects/${props.projectId}/telegram-bot/groups/${group.virtualUserId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    if (!resp.ok) {
+      throw new Error(await resp.text())
+    }
+
+    telegramBotGroups.value = telegramBotGroups.value.filter((item) => item.virtualUserId !== group.virtualUserId)
+    telegramBotSuccess.value = 'Групу відключено.'
+  } catch (e) {
+    telegramBotError.value = e.message || 'Не вдалося видалити групу.'
+  } finally {
+    telegramBotDeleting.value = { ...telegramBotDeleting.value, [group.virtualUserId]: false }
   }
 }
 
@@ -331,6 +453,9 @@ async function prepareFirmware() {
         <button class="settings-tab-btn" :class="{ active: activeTab === 'integration' }" type="button" @click="activeTab = 'integration'">
           Інтеграція
         </button>
+        <button class="settings-tab-btn" :class="{ active: activeTab === 'telegram-bot' }" type="button" @click="activeTab = 'telegram-bot'">
+          Телеграм бот
+        </button>
         <button class="settings-tab-btn" :class="{ active: activeTab === 'firmware' }" type="button" @click="activeTab = 'firmware'">
           Прошивка ESP32
         </button>
@@ -398,7 +523,76 @@ async function prepareFirmware() {
   -H 'X-Project-Secret: {{ revealSecret ? project.secret : "<your-project-secret>" }}'</code></pre>
       </section>
 
-      <section v-else class="settings-form-card integration-card">
+      <section v-else-if="activeTab === 'telegram-bot'" class="settings-form-card integration-card telegram-bot-card">
+        <h2>Телеграм бот</h2>
+        <p class="sub">Підключіть {{ telegramBotHandle }} до групи, щоб бот надсилав туди сповіщення про стан світла.</p>
+
+        <div class="telegram-bot-manual">
+          <ol class="telegram-bot-steps">
+            <li>
+              Додайте бота <strong>{{ telegramBotHandle }}</strong> у потрібну Telegram-групу.
+              <a
+                v-if="telegramBotStartGroupLink"
+                class="secondary-btn telegram-bot-link-btn"
+                :href="telegramBotStartGroupLink"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Додати бота
+              </a>
+            </li>
+            <li>Після додавання натисніть нижче “Знайти групу” і вкажіть повну назву групи так, як вона написана в Telegram.</li>
+            <li>Якщо група не знаходиться, надішліть будь-яке повідомлення у групу або перевірте, що бот справді доданий, і повторіть спробу.</li>
+          </ol>
+        </div>
+
+        <label class="field-label" for="telegram-bot-group-title">Повна назва групи</label>
+        <input
+          id="telegram-bot-group-title"
+          v-model="telegramBotTitle"
+          type="text"
+          class="field-input"
+          placeholder="Наприклад: Світло ЖК Сонце"
+        />
+
+        <div class="settings-form-actions">
+          <button class="primary-btn" type="button" :disabled="telegramBotSaving" @click="addTelegramBotGroup">
+            {{ telegramBotSaving ? 'Перевіряємо…' : 'Знайти групу' }}
+          </button>
+        </div>
+
+        <p v-if="telegramBotSaveError" class="error form-error">{{ telegramBotSaveError }}</p>
+        <p v-if="telegramBotSuccess" class="success form-success">{{ telegramBotSuccess }}</p>
+        <p v-if="telegramBotError" class="error form-error">{{ telegramBotError }}</p>
+        <p v-if="telegramBotLoading" class="sub">Завантаження списку груп…</p>
+
+        <div class="telegram-bot-groups">
+          <p class="field-label">Групи з підключеним ботом</p>
+
+          <ul v-if="telegramBotGroups.length" class="telegram-bot-group-list">
+            <li v-for="group in telegramBotGroups" :key="group.virtualUserId" class="telegram-bot-group-item">
+              <div class="telegram-bot-group-main">
+                <strong>{{ group.title }}</strong>
+                <span class="helper-text">chat_id: {{ group.telegramId }}</span>
+              </div>
+              <button
+                class="secondary-btn danger-btn telegram-bot-delete-btn"
+                type="button"
+                :disabled="telegramBotDeleting[group.virtualUserId]"
+                :title="`Видалити ${group.title}`"
+                :aria-label="`Видалити ${group.title}`"
+                @click="removeTelegramBotGroup(group)"
+              >
+                {{ telegramBotDeleting[group.virtualUserId] ? '⏳' : '🗑' }}
+              </button>
+            </li>
+          </ul>
+
+          <p v-else-if="!telegramBotLoading" class="sub settings-empty telegram-bot-empty">Ще немає жодної групи для цього проєкту.</p>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'firmware'" class="settings-form-card integration-card">
         <h2>Прошивка ESP32-C3</h2>
         <p class="sub">Вкажіть Wi-Fi мережу і зберіть індивідуальну прошивку для цієї адреси.</p>
 

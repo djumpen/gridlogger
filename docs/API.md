@@ -114,6 +114,78 @@ Errors:
 - `404` not found
 - `409` slug already exists
 
+## GET `/api/settings/projects/{projectId}/telegram-bot/groups`
+
+Returns Telegram groups linked to the current project through virtual Telegram users owned by the authenticated user.
+
+Success `200` example:
+
+```json
+{
+  "botUsername": "svitlohomes_bot",
+  "groups": [
+    {
+      "virtualUserId": 91,
+      "telegramId": -1001234567890,
+      "title": "Світло ЖК Сонце",
+      "chatType": "supergroup",
+      "username": "",
+      "addedAt": "2026-03-07T10:00:00Z"
+    }
+  ]
+}
+```
+
+Errors:
+- `401` unauthorized
+- `403` forbidden (not owner)
+- `404` project not found
+
+## POST `/api/settings/projects/{projectId}/telegram-bot/groups`
+
+Finds a Telegram group by full title in bot `getUpdates`, creates or reuses a virtual Telegram user, and subscribes it to the current project notifications.
+
+Request JSON:
+
+```json
+{
+  "title": "Світло ЖК Сонце"
+}
+```
+
+Success `201` example:
+
+```json
+{
+  "group": {
+    "virtualUserId": 91,
+    "telegramId": -1001234567890,
+    "title": "Світло ЖК Сонце",
+    "chatType": "supergroup",
+    "username": "",
+    "addedAt": "2026-03-07T10:00:00Z"
+  }
+}
+```
+
+Errors:
+- `400` invalid payload
+- `401` unauthorized
+- `403` forbidden (not owner)
+- `404` project not found / bot has not seen this group yet
+- `409` same group title resolves to multiple chats / group belongs to another owner
+- `503` telegram bot is not configured
+
+## DELETE `/api/settings/projects/{projectId}/telegram-bot/groups/{virtualUserId}`
+
+Removes the linked Telegram group from the current project. If that virtual user is not used by any other project, backend also deletes the virtual user and Telegram chat record.
+
+Errors:
+- `400` invalid path params
+- `401` unauthorized
+- `403` forbidden (not owner)
+- `404` project or linked group not found
+
 ## GET `/api/projects/{projectId}/notifications/subscription`
 
 Returns current authenticated user subscription for Telegram status notifications.

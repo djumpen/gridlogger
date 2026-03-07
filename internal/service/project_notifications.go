@@ -46,6 +46,9 @@ type ProjectNotificationStore interface {
 	ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]Project, error)
 	ListProjectIDsWithActiveSubscriptions(ctx context.Context) ([]int, error)
 	ListActiveSubscribersByProjectID(ctx context.Context, projectID int) ([]ProjectNotificationSubscriber, error)
+	ListTelegramBotGroupsByProjectID(ctx context.Context, ownerID int64, projectID int) ([]ProjectTelegramBotGroup, error)
+	UpsertTelegramBotGroupSubscription(ctx context.Context, in ProjectTelegramBotGroupUpsert) (ProjectTelegramBotGroup, error)
+	RemoveTelegramBotGroupSubscription(ctx context.Context, ownerID int64, projectID int, virtualUserID int64) (bool, error)
 	GetProjectStatusState(ctx context.Context, projectID int) (ProjectStatusState, bool, error)
 	UpsertProjectStatusState(ctx context.Context, in ProjectStatusStateUpsert) error
 	TryAcquireNotificationDispatcherLock(ctx context.Context) (bool, error)

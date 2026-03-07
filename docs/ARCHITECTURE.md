@@ -8,9 +8,11 @@
 4. Frontend project page (`/{slug}`) resolves project via `GET /api/project-slugs/{slug}`.
 5. Owner settings page (`/a/settings`) loads user projects via `GET /api/settings`.
 6. Owner can create/edit projects via `/api/settings/projects` and `/api/settings/projects/{projectId}`.
-7. Frontend requests availability for a window.
-8. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
-9. Backend returns intervals + stats for the same window.
+7. Owner project settings include a Telegram bot tab that can link a Telegram group to project notifications.
+8. Backend resolves Telegram group chat IDs from bot `getUpdates`, stores them as project-owned virtual users, and subscribes them like regular Telegram users.
+9. Frontend requests availability for a window.
+10. Backend computes interval status (`available` or `outage`) at 30s steps and merges adjacent segments.
+11. Backend returns intervals + stats for the same window.
 
 ## Telegram auth flow
 
@@ -21,6 +23,15 @@
 5. Backend upserts `telegram_accounts`, links/creates internal `users` row, and rejects replay based on `last_auth_date`.
 6. Backend issues HS256 JWT and sets `HttpOnly` session cookie.
 7. Frontend reads user via `GET /api/me`.
+
+## Telegram group notification flow
+
+1. Owner opens project settings and chooses `Телеграм бот`.
+2. Owner adds the bot to a Telegram group, then submits the exact group title.
+3. Backend calls `getUpdates`, scans group/supergroup chats from recent updates, and matches by title.
+4. When a match is found, backend upserts a virtual `users` row owned by the real owner and links it to the Telegram chat identity.
+5. Backend creates/activates a `project_notification_subscriptions` row for that virtual user and project.
+6. Notification dispatcher sends the same project status messages to both normal Telegram users and linked group chats.
 
 ## Why compute in backend code
 
