@@ -43,6 +43,7 @@ type ProjectStatusStateUpsert struct {
 type ProjectNotificationStore interface {
 	GetProjectNotificationSubscription(ctx context.Context, userID int64, projectID int) (bool, error)
 	SetProjectNotificationSubscription(ctx context.Context, userID int64, projectID int, subscribed bool) (bool, error)
+	CountActiveProjectNotificationSubscriptions(ctx context.Context, projectID int) (int, error)
 	ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]Project, error)
 	ListProjectIDsWithActiveSubscriptions(ctx context.Context) ([]int, error)
 	ListActiveSubscribersByProjectID(ctx context.Context, projectID int) ([]ProjectNotificationSubscriber, error)
@@ -129,6 +130,23 @@ func (s *ProjectNotificationService) ListActiveSubscribedProjectsByUserID(ctx co
 		return []Project{}, nil
 	}
 	return s.store.ListActiveSubscribedProjectsByUserID(ctx, userID)
+}
+
+func (s *ProjectNotificationService) CountActiveSubscriptionsByProjectID(ctx context.Context, projectID int) (int, error) {
+	if projectID <= 0 {
+		return 0, ErrProjectInvalidData
+	}
+	if s == nil || s.store == nil || s.projectCatalog == nil {
+		return 0, errors.New("project notifications are not configured")
+	}
+	_, found, err := s.projectCatalog.GetByID(ctx, projectID)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, ErrProjectNotFound
+	}
+	return s.store.CountActiveProjectNotificationSubscriptions(ctx, projectID)
 }
 
 func (s *ProjectNotificationService) PollAndNotify(ctx context.Context) error {

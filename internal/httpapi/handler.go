@@ -697,8 +697,14 @@ func (h *Handler) handleProjectNotificationSubscriptionGet(w http.ResponseWriter
 		h.writeProjectError(w, err)
 		return
 	}
+	subscriptionsCount, err := h.projectNotifications.CountActiveSubscriptionsByProjectID(r.Context(), projectID)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"subscribed": subscribed,
+		"subscribed":         subscribed,
+		"subscriptionsCount": subscriptionsCount,
 	})
 }
 
@@ -729,8 +735,14 @@ func (h *Handler) handleProjectNotificationSubscriptionPost(w http.ResponseWrite
 		h.writeProjectError(w, err)
 		return
 	}
+	subscriptionsCount, err := h.projectNotifications.CountActiveSubscriptionsByProjectID(r.Context(), projectID)
+	if err != nil {
+		h.writeProjectError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"subscribed": subscribed,
+		"subscribed":         subscribed,
+		"subscriptionsCount": subscriptionsCount,
 	})
 }
 

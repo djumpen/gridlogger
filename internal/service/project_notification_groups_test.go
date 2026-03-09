@@ -24,6 +24,10 @@ func (s *projectNotificationStoreStub) SetProjectNotificationSubscription(contex
 	return false, nil
 }
 
+func (s *projectNotificationStoreStub) CountActiveProjectNotificationSubscriptions(context.Context, int) (int, error) {
+	return 0, nil
+}
+
 func (s *projectNotificationStoreStub) ListActiveSubscribedProjectsByUserID(context.Context, int64) ([]Project, error) {
 	return nil, nil
 }

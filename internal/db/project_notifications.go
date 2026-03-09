@@ -56,6 +56,21 @@ func (r *ProjectNotificationRepository) SetProjectNotificationSubscription(ctx c
 	return current, nil
 }
 
+func (r *ProjectNotificationRepository) CountActiveProjectNotificationSubscriptions(ctx context.Context, projectID int) (int, error) {
+	const q = `
+		SELECT COUNT(*)
+		FROM project_notification_subscriptions
+		WHERE project_id = $1
+		  AND is_active = TRUE
+	`
+
+	var count int
+	if err := r.pool.QueryRow(ctx, q, projectID).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *ProjectNotificationRepository) ListActiveSubscribedProjectsByUserID(ctx context.Context, userID int64) ([]service.Project, error) {
 	const q = `
 		SELECT p.id, p.name, p.slug, p.user_id, p.city, p.description, p.created_at

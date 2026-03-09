@@ -30,6 +30,7 @@ const notificationsLoading = ref(false)
 const notificationsSaving = ref(false)
 const notificationsError = ref('')
 const notificationsSubscribed = ref(false)
+const notificationsSubscriptionsCount = ref(0)
 const projectTab = ref('outages')
 const outageScheduleLoading = ref(false)
 const outageScheduleLoaded = ref(false)
@@ -151,6 +152,15 @@ const windowLabel = computed(() => {
 const hasOutageSchedule = computed(() => !!props.project?.hasOutageSchedule)
 const showOutagesTab = computed(() => projectTab.value === 'outages' || !hasOutageSchedule.value)
 const showYasnoTab = computed(() => hasOutageSchedule.value && projectTab.value === 'yasno')
+const notificationsButtonLabel = computed(() => {
+  if (notificationsSaving.value) {
+    return 'Оновлення…'
+  }
+  const countLabel = String(Math.max(0, Number(notificationsSubscriptionsCount.value) || 0))
+  return notificationsSubscribed.value
+    ? `🔕 Відписатись | ${countLabel}`
+    : `🔔 Підписатись на оновлення | ${countLabel}`
+})
 
 function formatHoursToUA(value) {
   const hoursFloat = Number(value)
@@ -350,6 +360,7 @@ async function loadNotificationSubscription() {
   notificationsError.value = ''
   notificationsAvailable.value = false
   notificationsSubscribed.value = false
+  notificationsSubscriptionsCount.value = 0
 
   try {
     const subResp = await fetch(`/api/projects/${props.project.id}/notifications/subscription`, {
@@ -368,6 +379,7 @@ async function loadNotificationSubscription() {
     notificationsAvailable.value = true
     const data = await subResp.json()
     notificationsSubscribed.value = !!data.subscribed
+    notificationsSubscriptionsCount.value = Math.max(0, Number(data.subscriptionsCount) || 0)
   } catch (e) {
     notificationsError.value = e.message || 'Не вдалося завантажити налаштування сповіщень.'
   } finally {
@@ -431,6 +443,7 @@ async function toggleNotificationSubscription() {
     }
     const data = await resp.json()
     notificationsSubscribed.value = !!data.subscribed
+    notificationsSubscriptionsCount.value = Math.max(0, Number(data.subscriptionsCount) || 0)
   } catch (e) {
     notificationsError.value = e.message || 'Не вдалося оновити підписку на сповіщення.'
   } finally {
@@ -482,11 +495,7 @@ onBeforeUnmount(() => {
         :disabled="notificationsLoading || notificationsSaving"
         @click="toggleNotificationSubscription"
       >
-        {{
-          notificationsSaving
-            ? 'Оновлення…'
-            : (notificationsSubscribed ? '🔕 Відписатись' : '🔔 Підписатись на оновлення')
-        }}
+        {{ notificationsButtonLabel }}
       </button>
       <button
         v-else
