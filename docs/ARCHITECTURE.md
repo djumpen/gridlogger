@@ -40,7 +40,7 @@ This can move to continuous aggregates later if needed.
 
 ## Outage rule
 
-- Configurable threshold (`OUTAGE_THRESHOLD_SECONDS`, default 120).
+- Configurable threshold (`OUTAGE_THRESHOLD_SECONDS`, default 240).
 - For a time point `t`, status is `available` if at least one ping exists in `[t-threshold, t]`, otherwise `outage`.
 - Ping endpoint reads optional `X-Project-Secret` and currently logs warning on mismatch without rejecting.
 

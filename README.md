@@ -6,7 +6,7 @@ GridLogger tracks power availability from IoT device pings (every ~30s) and visu
 
 - Go (std `net/http`) REST API.
 - TimescaleDB storage (`pings` hypertable).
-- Outage logic: outage if no ping for `OUTAGE_THRESHOLD_SECONDS` (default 120s).
+- Outage logic: outage if no ping for `OUTAGE_THRESHOLD_SECONDS` (default 240s).
 - Vue frontend with fixed views: day/week/month (week default), interval highlighting, and window stats.
 - Single-tenant, trusted/open ping endpoint.
 - Kubernetes manifests (k3s-ready) + `make deploy`.
@@ -127,7 +127,7 @@ Environment variables:
 
 - `DATABASE_URL` (required)
 - `LISTEN_ADDR` (default `:8080`)
-- `OUTAGE_THRESHOLD_SECONDS` (default `120`)
+- `OUTAGE_THRESHOLD_SECONDS` (default `240`)
 - `DEFAULT_PROJECT_ID` (default `1`)
 - `TELEGRAM_BOT_TOKEN` (required to enable Telegram login)
 - `TELEGRAM_BOT_USERNAME` (required to enable Telegram login)

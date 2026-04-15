@@ -8,7 +8,7 @@ Core product behavior:
 - IoT devices ping backend every 30 seconds.
 - Endpoint is open and trusted.
 - Server stores ping arrival timestamps in TimescaleDB.
-- Outage means no ping for 2 minutes by default (configurable).
+- Outage means no ping for 4 minutes by default (configurable).
 - UI shows day/week/month windows and highlights availability/outage intervals.
 - Stats are calculated for the visible window only.
 

@@ -24,7 +24,7 @@ spec:
         - name: LISTEN_ADDR
           value: ":8080"
         - name: OUTAGE_THRESHOLD_SECONDS
-          value: "120"
+          value: "240"
         - name: DEFAULT_PROJECT_ID
           value: "1"
         - name: DATABASE_URL

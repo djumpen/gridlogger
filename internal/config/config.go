@@ -40,7 +40,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		ListenAddr:               getenv("LISTEN_ADDR", ":8080"),
 		DatabaseURL:              os.Getenv("DATABASE_URL"),
-		OutageThreshold:          2 * time.Minute,
+		OutageThreshold:          4 * time.Minute,
 		DefaultProjectID:         1,
 		TelegramAuthTTL:          24 * time.Hour,
 		JWTIssuer:                getenv("JWT_ISSUER", "gridlogger"),
