@@ -180,6 +180,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Connect to Tailscale (k3s API is only reachable over the tailnet)
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: 100.116.250.63
+
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
