@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -80,4 +82,30 @@ func (r *PingRepository) GetLastPingAt(ctx context.Context, projectID int) (time
 		return time.Time{}, false, nil
 	}
 	return last.Time.UTC(), true, nil
+}
+
+// GetRunStart returns the first ping after the most recent gap longer than maxGap within [from, to],
+// i.e. when the current uninterrupted run of pings began. The first ping in the range counts as a run start.
+func (r *PingRepository) GetRunStart(ctx context.Context, projectID int, from, to time.Time, maxGap time.Duration) (time.Time, bool, error) {
+	var start time.Time
+	err := r.pool.QueryRow(ctx, `
+		SELECT ts
+		FROM (
+			SELECT ts, ts - LAG(ts) OVER (ORDER BY ts) AS gap
+			FROM pings
+			WHERE project_id = $1
+			  AND ts >= $2
+			  AND ts <= $3
+		) p
+		WHERE gap IS NULL OR gap > make_interval(secs => $4)
+		ORDER BY ts DESC
+		LIMIT 1
+	`, projectID, from, to, maxGap.Seconds()).Scan(&start)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return start.UTC(), true, nil
 }

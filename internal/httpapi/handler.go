@@ -101,6 +101,7 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("POST /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/ping", h.handlePingRoute)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/availability", h.handleAvailabilityRoute)
+	h.mux.HandleFunc("GET /api/projects/{projectId}/status", h.handleProjectStatus)
 	h.mux.HandleFunc("GET /api/projects/{projectId}/yasno", h.handleProjectYasnoSchedule)
 
 	h.mux.HandleFunc("GET /api/auth/telegram/config", h.handleTelegramConfig)
@@ -204,6 +205,23 @@ func (h *Handler) handleAvailabilityRoute(w http.ResponseWriter, r *http.Request
 		"timezone":    "Europe/Kyiv",
 		"sampleEvery": "30s",
 	})
+}
+
+// handleProjectStatus returns the live power state (for Home Assistant and other integrations).
+func (h *Handler) handleProjectStatus(w http.ResponseWriter, r *http.Request) {
+	projectID, err := parseProjectID(r.PathValue("projectId"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	status, err := h.svc.CurrentStatus(r.Context(), projectID)
+	if err != nil {
+		log.Printf("project status error: project_id=%d err=%v", projectID, err)
+		http.Error(w, "failed to load status", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (h *Handler) handleSettings(w http.ResponseWriter, r *http.Request) {

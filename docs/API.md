@@ -441,6 +441,32 @@ Errors:
 - `400` invalid path params or query window
 - `404` unknown route/method
 
+## GET `/api/projects/{projectId}/status`
+
+Returns the live power state of a project (for Home Assistant and other integrations). Cheap to poll (two indexed queries).
+Uses the same rule as `availability`: `available` while the latest ping is at most `outageThresholdSeconds` old.
+
+Success `200` example:
+
+```json
+{
+  "projectId": 1,
+  "status": "available",
+  "since": "2026-11-09T20:43:14.229203Z",
+  "lastPingAt": "2026-11-10T16:35:12.470518Z",
+  "outageThresholdSeconds": 240,
+  "checkedAt": "2026-11-10T16:35:26Z"
+}
+```
+
+- `status`: `available` | `outage` | `unknown` (no pings yet; `since` and `lastPingAt` are `null`)
+- `since`: outage → `lastPingAt + outageThreshold`; available → first ping after the last gap longer than the threshold (looks back at most 30 days)
+- Response has `Cache-Control: no-store`
+
+Errors:
+- `400` invalid project id
+- `500` database error
+
 ## GET `/api/auth/telegram/config`
 
 Returns Telegram widget settings and whether auth is enabled.

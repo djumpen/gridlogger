@@ -39,6 +39,44 @@ func (m *memoryStore) GetFirstPing(_ context.Context, _ int) (time.Time, bool, e
 	return first, true, nil
 }
 
+func (m *memoryStore) GetLastPingAt(_ context.Context, _ int) (time.Time, bool, error) {
+	if len(m.pings) == 0 {
+		return time.Time{}, false, nil
+	}
+	last := m.pings[0]
+	for _, p := range m.pings[1:] {
+		if p.After(last) {
+			last = p
+		}
+	}
+	return last, true, nil
+}
+
+func (m *memoryStore) GetRunStart(_ context.Context, _ int, from, to time.Time, maxGap time.Duration) (time.Time, bool, error) {
+	var prev, start time.Time
+	found := false
+	for _, p := range sortedCopy(m.pings) {
+		if p.Before(from) || p.After(to) {
+			continue
+		}
+		if !found || p.Sub(prev) > maxGap {
+			start = p
+		}
+		prev, found = p, true
+	}
+	return start, found, nil
+}
+
+func sortedCopy(in []time.Time) []time.Time {
+	out := append([]time.Time(nil), in...)
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].Before(out[j-1]); j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}
+
 func TestBuildIntervals(t *testing.T) {
 	base := time.Date(2026, 2, 25, 0, 0, 0, 0, time.UTC)
 	store := &memoryStore{

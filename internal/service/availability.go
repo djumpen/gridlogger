@@ -12,6 +12,10 @@ type PingStore interface {
 	InsertPing(ctx context.Context, projectID int, ts time.Time) error
 	GetPingsBetween(ctx context.Context, projectID int, from, to time.Time) ([]time.Time, error)
 	GetFirstPing(ctx context.Context, projectID int) (time.Time, bool, error)
+	GetLastPingAt(ctx context.Context, projectID int) (time.Time, bool, error)
+	// GetRunStart returns the earliest ping in [from, to] that ends the most recent gap longer than maxGap
+	// (i.e. the start of the current uninterrupted run of pings). found=false when there are no pings in range.
+	GetRunStart(ctx context.Context, projectID int, from, to time.Time, maxGap time.Duration) (time.Time, bool, error)
 }
 
 type Interval struct {
@@ -92,6 +96,62 @@ func (s *AvailabilityService) BuildIntervals(ctx context.Context, projectID int,
 	}
 	stats := calcStats(intervals, from, statsEnd)
 	return intervals, stats, nil
+}
+
+// statusLookback caps how far back CurrentStatus searches for the start of an uninterrupted run.
+const statusLookback = 30 * 24 * time.Hour
+
+// CurrentStatus is the live power state of a project, for integrations such as Home Assistant.
+type CurrentStatus struct {
+	ProjectID              int        `json:"projectId"`
+	Status                 string     `json:"status"` // available | outage | unknown
+	Since                  *time.Time `json:"since"`  // when the current status began (capped at 30 days for "available")
+	LastPingAt             *time.Time `json:"lastPingAt"`
+	OutageThresholdSeconds int        `json:"outageThresholdSeconds"`
+	CheckedAt              time.Time  `json:"checkedAt"`
+}
+
+// CurrentStatus uses the same rule as BuildIntervals/statusAt: available while the latest ping is at most
+// outageThreshold old. Outage starts at lastPing+threshold; availability starts at the first ping after the
+// last gap longer than the threshold.
+func (s *AvailabilityService) CurrentStatus(ctx context.Context, projectID int) (CurrentStatus, error) {
+	if projectID <= 0 {
+		return CurrentStatus{}, errors.New("projectID must be positive")
+	}
+	now := s.nowFn()
+	out := CurrentStatus{
+		ProjectID:              projectID,
+		Status:                 "unknown",
+		OutageThresholdSeconds: int(s.outageThreshold / time.Second),
+		CheckedAt:              now,
+	}
+
+	last, found, err := s.store.GetLastPingAt(ctx, projectID)
+	if err != nil {
+		return CurrentStatus{}, fmt.Errorf("get last ping: %w", err)
+	}
+	if !found {
+		return out, nil
+	}
+	last = last.UTC()
+	out.LastPingAt = &last
+
+	if last.Before(now.Add(-s.outageThreshold)) {
+		since := last.Add(s.outageThreshold)
+		out.Status, out.Since = "outage", &since
+		return out, nil
+	}
+
+	start, found, err := s.store.GetRunStart(ctx, projectID, now.Add(-statusLookback), now, s.outageThreshold)
+	if err != nil {
+		return CurrentStatus{}, fmt.Errorf("get run start: %w", err)
+	}
+	out.Status = "available"
+	if found {
+		start = start.UTC()
+		out.Since = &start
+	}
+	return out, nil
 }
 
 func statusAt(point time.Time, pings []time.Time, threshold time.Duration, firstPing time.Time, hasFirstPing bool) string {
