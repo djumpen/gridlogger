@@ -32,6 +32,7 @@
 4. When a match is found, backend upserts a virtual `users` row owned by the real owner and links it to the Telegram chat identity.
 5. Backend creates/activates a `project_notification_subscriptions` row for that virtual user and project.
 6. Notification dispatcher sends the same project status messages to both normal Telegram users and linked group chats.
+7. Owners can mute a project (`projects.notifications_enabled = false`, settings checkbox). The dispatcher then keeps tracking status transitions but sends nothing; subscriptions stay intact.
 
 ## Why compute in backend code
 

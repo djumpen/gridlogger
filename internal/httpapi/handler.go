@@ -319,7 +319,7 @@ func (h *Handler) handleSettingsProjectUpdate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	project, err := h.projectCatalog.UpdateForUser(r.Context(), userID, projectID, in.Name, in.City, in.Slug, in.IsPublic)
+	project, err := h.projectCatalog.UpdateForUser(r.Context(), userID, projectID, in.Name, in.City, in.Slug, in.IsPublic, in.NotificationsEnabled)
 	if err != nil {
 		h.writeProjectError(w, err)
 		return
@@ -1031,6 +1031,8 @@ type projectInput struct {
 	City     string `json:"city"`
 	Slug     string `json:"slug"`
 	IsPublic bool   `json:"isPublic"`
+	// NotificationsEnabled is optional; nil means "leave unchanged" on update.
+	NotificationsEnabled *bool `json:"notificationsEnabled"`
 }
 
 type subscriptionInput struct {
@@ -1071,10 +1073,11 @@ func parseProjectInput(r *http.Request) (projectInput, error) {
 		return projectInput{}, errors.New("invalid form payload")
 	}
 	return projectInput{
-		Name:     r.PostForm.Get("name"),
-		City:     r.PostForm.Get("city"),
-		Slug:     r.PostForm.Get("slug"),
-		IsPublic: parseOptionalBoolForm(r.PostForm.Get("is_public"), true),
+		Name:                 r.PostForm.Get("name"),
+		City:                 r.PostForm.Get("city"),
+		Slug:                 r.PostForm.Get("slug"),
+		IsPublic:             parseOptionalBoolForm(r.PostForm.Get("is_public"), true),
+		NotificationsEnabled: parseOptionalBoolPtrForm(r.PostForm.Get("notifications_enabled")),
 	}, nil
 }
 
@@ -1088,6 +1091,18 @@ func parseOptionalBoolForm(raw string, fallback bool) bool {
 		return fallback
 	}
 	return parsed
+}
+
+func parseOptionalBoolPtrForm(raw string) *bool {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return nil
+	}
+	return &parsed
 }
 
 func parseSubscriptionInput(r *http.Request) (subscriptionInput, error) {

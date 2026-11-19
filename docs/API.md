@@ -19,6 +19,7 @@ Success `200` example:
       "city": "Київ",
       "description": "Ввод #1",
       "isPublic": true,
+      "notificationsEnabled": true,
       "hasOutageSchedule": true,
       "createdAt": "2026-03-02T10:00:00Z"
     }
@@ -42,6 +43,7 @@ Success `200` example:
     "city": "Київ",
     "description": "Ввод #1",
     "isPublic": true,
+    "notificationsEnabled": true,
     "hasOutageSchedule": true,
     "createdAt": "2026-03-02T10:00:00Z"
   }
@@ -108,6 +110,10 @@ Errors:
 ## POST `/api/settings/projects/{projectId}`
 
 Updates owner project fields (`name`, `city`, `slug`, `isPublic`).
+
+Optional `notificationsEnabled` (boolean): when `false`, Telegram status notifications for this project
+are not sent to anyone (personal subscribers and bot groups). Status is still tracked and subscriptions are kept.
+Omitting the field leaves the current value unchanged. New projects default to `true`.
 
 Errors:
 - `400` invalid fields / slug format

@@ -18,7 +18,8 @@ const form = ref({
   name: '',
   city: '',
   slug: '',
-  isPublic: true
+  isPublic: true,
+  notificationsEnabled: true
 })
 
 const saving = ref(false)
@@ -260,7 +261,8 @@ async function loadProject() {
       name: project.value?.name || '',
       city: project.value?.city || '',
       slug: project.value?.slug || '',
-      isPublic: project.value?.isPublic ?? true
+      isPublic: project.value?.isPublic ?? true,
+      notificationsEnabled: project.value?.notificationsEnabled ?? true
     }
   } catch (e) {
     error.value = e.message || 'Не вдалося завантажити адресу.'
@@ -655,7 +657,8 @@ async function saveProject() {
         name,
         city,
         slug,
-        isPublic: !!form.value.isPublic
+        isPublic: !!form.value.isPublic,
+        notificationsEnabled: !!form.value.notificationsEnabled
       })
     })
 
@@ -667,6 +670,7 @@ async function saveProject() {
     project.value = data.project || project.value
     form.value.slug = project.value?.slug || slug
     form.value.isPublic = project.value?.isPublic ?? form.value.isPublic
+    form.value.notificationsEnabled = project.value?.notificationsEnabled ?? form.value.notificationsEnabled
     saveSuccess.value = 'Зміни збережено.'
   } catch (e) {
     saveError.value = e.message || 'Не вдалося зберегти зміни.'
@@ -970,6 +974,13 @@ async function prepareFirmware() {
           <input v-model="form.isPublic" type="checkbox" />
           <span>Показувати в загальному списку</span>
         </label>
+        <label class="field-checkbox">
+          <input v-model="form.notificationsEnabled" type="checkbox" />
+          <span>Надсилати сповіщення в Telegram</span>
+        </label>
+        <p v-if="!form.notificationsEnabled" class="helper-text">
+          Сповіщення про зміну статусу не надсилатимуться ні підписникам, ні групам. Підписки зберігаються.
+        </p>
 
         <p v-if="slugError" class="error form-error">{{ slugError }}</p>
         <p v-if="saveError" class="error form-error">{{ saveError }}</p>

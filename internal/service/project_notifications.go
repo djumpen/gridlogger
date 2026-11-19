@@ -212,7 +212,18 @@ func (s *ProjectNotificationService) processProject(ctx context.Context, project
 		return nil
 	}
 
+	// Muted projects keep tracking status (so durations stay correct after unmuting)
+	// but never send anything.
 	shouldNotify := shouldNotifyTransition(state.LastStatus, currentStatus)
+	if shouldNotify && !project.NotificationsEnabled {
+		log.Printf(
+			"project notifications disabled, skipping: project_id=%d previous_status=%s current_status=%s",
+			projectID,
+			state.LastStatus,
+			currentStatus,
+		)
+		shouldNotify = false
+	}
 	lastNotifiedStatus := state.LastNotifiedStatus
 	lastNotifiedAt := state.LastNotifiedAt
 

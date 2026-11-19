@@ -24,16 +24,18 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 const reservedProjectSlugAPI = "api"
 
 type Project struct {
-	ID                int       `json:"id"`
-	Name              string    `json:"name"`
-	Slug              string    `json:"slug"`
-	UserID            int64     `json:"userId"`
-	City              string    `json:"city"`
-	Description       string    `json:"description"`
-	Secret            string    `json:"secret,omitempty"`
-	IsPublic          bool      `json:"isPublic"`
-	HasOutageSchedule bool      `json:"hasOutageSchedule"`
-	CreatedAt         time.Time `json:"createdAt"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	UserID      int64  `json:"userId"`
+	City        string `json:"city"`
+	Description string `json:"description"`
+	Secret      string `json:"secret,omitempty"`
+	IsPublic    bool   `json:"isPublic"`
+	// NotificationsEnabled gates Telegram status alerts for all subscribers of the project.
+	NotificationsEnabled bool      `json:"notificationsEnabled"`
+	HasOutageSchedule    bool      `json:"hasOutageSchedule"`
+	CreatedAt            time.Time `json:"createdAt"`
 }
 
 type ProjectCreateInput struct {
@@ -46,12 +48,13 @@ type ProjectCreateInput struct {
 }
 
 type ProjectUpdateInput struct {
-	ID       int
-	Name     string
-	Slug     string
-	City     string
-	UserID   int64
-	IsPublic bool
+	ID                   int
+	Name                 string
+	Slug                 string
+	City                 string
+	UserID               int64
+	IsPublic             bool
+	NotificationsEnabled bool
 }
 
 type ProjectStore interface {
@@ -165,7 +168,9 @@ func (s *ProjectCatalogService) CreateForUser(ctx context.Context, userID int64,
 	return project, nil
 }
 
-func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64, projectID int, name, city, slug string, isPublic bool) (Project, error) {
+// UpdateForUser updates owner-editable project fields. A nil notificationsEnabled keeps the current value,
+// so clients that don't know about the flag can't flip it by accident.
+func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64, projectID int, name, city, slug string, isPublic bool, notificationsEnabled *bool) (Project, error) {
 	if s == nil || s.store == nil {
 		return Project{}, fmt.Errorf("project store is not configured")
 	}
@@ -188,13 +193,19 @@ func (s *ProjectCatalogService) UpdateForUser(ctx context.Context, userID int64,
 		return Project{}, err
 	}
 
+	notify := current.NotificationsEnabled
+	if notificationsEnabled != nil {
+		notify = *notificationsEnabled
+	}
+
 	project, err := s.store.UpdateProject(ctx, ProjectUpdateInput{
-		ID:       current.ID,
-		UserID:   current.UserID,
-		Name:     name,
-		City:     city,
-		Slug:     slug,
-		IsPublic: isPublic,
+		ID:                   current.ID,
+		UserID:               current.UserID,
+		Name:                 name,
+		City:                 city,
+		Slug:                 slug,
+		IsPublic:             isPublic,
+		NotificationsEnabled: notify,
 	})
 	if err != nil {
 		return Project{}, err

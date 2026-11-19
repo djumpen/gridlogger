@@ -66,6 +66,7 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 			description TEXT NOT NULL DEFAULT '',
 			secret TEXT NOT NULL DEFAULT '',
 			is_public BOOLEAN NOT NULL DEFAULT TRUE,
+			notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`,
 		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS secret TEXT`,
@@ -75,6 +76,10 @@ func EnsureSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		`UPDATE projects SET is_public = TRUE WHERE is_public IS NULL`,
 		`ALTER TABLE projects ALTER COLUMN is_public SET DEFAULT TRUE`,
 		`ALTER TABLE projects ALTER COLUMN is_public SET NOT NULL`,
+		`ALTER TABLE projects ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN`,
+		`UPDATE projects SET notifications_enabled = TRUE WHERE notifications_enabled IS NULL`,
+		`ALTER TABLE projects ALTER COLUMN notifications_enabled SET DEFAULT TRUE`,
+		`ALTER TABLE projects ALTER COLUMN notifications_enabled SET NOT NULL`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug)`,
 		`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)`,
 		`CREATE TABLE IF NOT EXISTS project_notification_subscriptions (
