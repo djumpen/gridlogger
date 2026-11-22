@@ -32,3 +32,20 @@ rollout-version:
 	test -n "$(VERSION)" || (echo "VERSION is required, e.g. make rollout-version VERSION=1.2.3"; exit 1)
 	K8S_NAMESPACE="$(NAMESPACE)" BACKEND_IMAGE="$(APP_IMAGE)" FRONTEND_IMAGE="$(FRONTEND_IMAGE)" FIRMWARE_IMAGE="$(FIRMWARE_IMAGE)" \
 		sh scripts/rollout-version.sh "$(VERSION)" $(if $(filter true,$(WITH_FIRMWARE)),--with-firmware,)
+
+.PHONY: dev
+dev:
+	cd frontend && npm ci
+	node scripts/dev-demo.mjs
+
+.PHONY: smoke
+smoke:
+	node scripts/smoke.mjs
+
+.PHONY: ci
+ci:
+	sh scripts/next-version.sh
+	go vet ./...
+	go test ./...
+	cd frontend && npm ci && npm run build
+	node scripts/smoke.mjs
