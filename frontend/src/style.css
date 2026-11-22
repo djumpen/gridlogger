@@ -279,6 +279,27 @@ body {
   margin: 4px 0 10px;
 }
 
+.landing-empty {
+  padding: 22px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: rgba(24, 35, 47, 0.68);
+  max-width: 760px;
+  text-align: center;
+}
+
+.landing-empty-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.landing-empty-text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .project-list {
   list-style: none;
   padding: 0;
