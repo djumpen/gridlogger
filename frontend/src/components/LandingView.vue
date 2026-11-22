@@ -102,6 +102,9 @@ async function loadCurrentStatuses() {
       </li>
       </ul>
     </template>
-    <p v-else class="sub">Поки що проєктів немає.</p>
+    <div v-else class="landing-empty">
+      <p class="landing-empty-title">Поки що немає публічних адрес</p>
+      <p class="landing-empty-text">Щойно хтось додасть адресу, вона з’явиться тут. Увійдіть через Telegram, щоб додати свою.</p>
+    </div>
   </section>
 </template>
