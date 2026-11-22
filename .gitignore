@@ -17,3 +17,6 @@ frontend/dist/
 .vscode/
 .idea/
 .infra/
+
+# Agent working folder
+.scratch/

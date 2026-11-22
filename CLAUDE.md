@@ -84,3 +84,5 @@ All timestamps stored as UTC; frontend displays in `Europe/Kyiv` (hardcoded).
 - Prefer simple, direct solutions over premature abstraction (this is a small-scale project).
 - DB migrations must be additive and backward-compatible.
 - Visual style: warm light background, bold green/red availability signals, rounded cards, mobile-responsive. Do not introduce an unstyled enterprise look.
+
+@AGENTS.md
